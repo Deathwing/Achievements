@@ -1,0 +1,8 @@
+<Bindings>
+	<Binding name="TOGGLEACHIEVEMENT" header="ACHIEVEMENTS" default="Y">
+		ToggleAchievementFrame();
+	</Binding>
+	<Binding name="TOGGLESTATISTICS" default="SHIFT-Y">
+		ToggleAchievementFrame(true);
+	</Binding>
+</Bindings>
