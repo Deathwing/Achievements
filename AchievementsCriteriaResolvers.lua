@@ -587,6 +587,156 @@ Resolvers.factions = FACTION_DATA;
 Resolvers.items = ITEM_DATA;
 Resolvers.emotes = EMOTE_DATA;
 
+function Resolvers.GetEmptyCriteriaList()
+	Resolvers.emptyCriteriaList = Resolvers.emptyCriteriaList or {};
+	return Resolvers.emptyCriteriaList;
+end
+
+function Resolvers.GetRecordableCriteriaByType(criteriaType)
+	criteriaType = tonumber(criteriaType);
+	if not criteriaType then
+		return Resolvers.GetEmptyCriteriaList();
+	end
+
+	if not Resolvers.recordableCriteriaByType then
+		local cache = {};
+		for _, criteria in pairs(CRITERIA_DATA) do
+			if Resolvers.IsClientRecordableCriteria(criteria) then
+				local currentType = tonumber(criteria.type);
+				if currentType then
+					cache[currentType] = cache[currentType] or {};
+					tinsert(cache[currentType], criteria);
+				end
+			end
+		end
+		Resolvers.recordableCriteriaByType = cache;
+	end
+
+	return Resolvers.recordableCriteriaByType[criteriaType] or Resolvers.GetEmptyCriteriaList();
+end
+
+function Resolvers.GetCriteriaByStartEvent(startEvent)
+	startEvent = tonumber(startEvent);
+	if not startEvent then
+		return Resolvers.GetEmptyCriteriaList();
+	end
+
+	if not Resolvers.criteriaByStartEvent then
+		local cache = {};
+		for _, criteria in pairs(CRITERIA_DATA) do
+			local currentEvent = tonumber(criteria.startEvent);
+			if currentEvent then
+				cache[currentEvent] = cache[currentEvent] or {};
+				tinsert(cache[currentEvent], criteria);
+			end
+		end
+		Resolvers.criteriaByStartEvent = cache;
+	end
+
+	return Resolvers.criteriaByStartEvent[startEvent] or Resolvers.GetEmptyCriteriaList();
+end
+
+function Resolvers.GetRecordableCriteriaByFailEvent(failEvent)
+	failEvent = tonumber(failEvent);
+	if not failEvent then
+		return Resolvers.GetEmptyCriteriaList();
+	end
+
+	if not Resolvers.recordableCriteriaByFailEvent then
+		local cache = {};
+		for _, criteria in pairs(CRITERIA_DATA) do
+			if Resolvers.IsClientRecordableCriteria(criteria) then
+				local currentEvent = tonumber(criteria.failEvent);
+				if currentEvent then
+					cache[currentEvent] = cache[currentEvent] or {};
+					tinsert(cache[currentEvent], criteria);
+				end
+			end
+		end
+		Resolvers.recordableCriteriaByFailEvent = cache;
+	end
+
+	return Resolvers.recordableCriteriaByFailEvent[failEvent] or Resolvers.GetEmptyCriteriaList();
+end
+
+function Resolvers.MarkCriteriaRefreshType(criteriaTypes, criteriaType)
+	criteriaType = tonumber(criteriaType);
+	if not criteriaType then
+		return criteriaTypes;
+	end
+	criteriaTypes = criteriaTypes or {};
+	criteriaTypes[criteriaType] = true;
+	return criteriaTypes;
+end
+
+function Resolvers.ScheduleCriteriaTypesRefresh(criteriaTypes, showAlerts, delay, reason)
+	if not criteriaTypes then
+		return false;
+	end
+	if Achievements.ScheduleCriteriaTypeRefresh then
+		Achievements.ScheduleCriteriaTypeRefresh(criteriaTypes, showAlerts, delay, reason);
+		return true;
+	end
+	if Achievements.RefreshCriteriaAchievements then
+		Achievements.RefreshCriteriaAchievements(showAlerts);
+		return true;
+	end
+	return false;
+end
+
+function Resolvers.BuildPlayerAuraSnapshot(unit)
+	local snapshot = { spellIDs = {}, names = {} };
+	if not UnitAura then
+		return snapshot;
+	end
+	unit = unit or "player";
+	for filterIndex = 1, 2 do
+		local filter = filterIndex == 1 and "HELPFUL" or "HARMFUL";
+		for auraIndex = 1, 40 do
+			local name, _, _, _, _, _, _, _, _, auraSpellID = UnitAura(unit, auraIndex, filter);
+			if not name then
+				break;
+			end
+			if type(name) == "string" and name ~= "" then
+				snapshot.names[name] = true;
+			end
+			auraSpellID = tonumber(auraSpellID) or 0;
+			if auraSpellID ~= 0 then
+				snapshot.spellIDs[auraSpellID] = true;
+			end
+		end
+	end
+	return snapshot;
+end
+
+function Resolvers.GetAuraCriteriaCache()
+	if Resolvers.auraCriteriaCache then
+		return Resolvers.auraCriteriaCache;
+	end
+
+	local cache = { gains = {}, starts = {}, fails = {} };
+	for _, criteria in pairs(CRITERIA_DATA) do
+		if Resolvers.IsClientRecordableCriteria(criteria) then
+			if criteria.type == CRITERIA_TYPE.GAIN_AURA and criteria.asset and criteria.asset ~= 0 then
+				tinsert(cache.gains, criteria);
+			end
+
+			local startSpellID = criteria.startAsset ~= 0 and criteria.startAsset or criteria.asset;
+			if startSpellID and startSpellID ~= 0 and (criteria.startEvent == CRITERIA_START_EVENT.GAIN_AURA or criteria.startEvent == CRITERIA_START_EVENT.GAIN_AURA_EFFECT) then
+				tinsert(cache.starts, criteria);
+			end
+
+			local failSpellID = criteria.failAsset ~= 0 and criteria.failAsset or criteria.asset;
+			if failSpellID and failSpellID ~= 0 and (criteria.failEvent == CRITERIA_FAIL_EVENT.GAIN_AURA or criteria.failEvent == CRITERIA_FAIL_EVENT.GAIN_AURA_EFFECT or criteria.failEvent == CRITERIA_FAIL_EVENT.LOSE_AURA) then
+				tinsert(cache.fails, criteria);
+			end
+		end
+	end
+
+	Resolvers.auraCriteriaCache = cache;
+	return cache;
+end
+
 function Resolvers.LocaleLower(value)
 	value = tostring(value or "");
 	local ok, lowered = pcall(strlower, value);
@@ -1377,7 +1527,7 @@ function Resolvers.RecordCriteriaStart(startEvent, assetID)
 	end
 
 	local recorded = false;
-	for _, criteria in pairs(CRITERIA_DATA) do
+	for _, criteria in ipairs(Resolvers.GetCriteriaByStartEvent(startEvent)) do
 		if criteria.startEvent == startEvent and Resolvers.EventAssetMatches(criteria.startAsset, assetID) then
 			recorded = Resolvers.StartCriteriaAttempt(criteria) or recorded;
 		end
@@ -1392,7 +1542,7 @@ function Resolvers.RecordCriteriaFail(failEvent, assetID)
 	end
 
 	local recorded = false;
-	for _, criteria in pairs(CRITERIA_DATA) do
+	for _, criteria in ipairs(Resolvers.GetRecordableCriteriaByFailEvent(failEvent)) do
 		if Resolvers.IsClientRecordableCriteria(criteria)
 			and criteria.failEvent == failEvent
 			and Resolvers.EventAssetMatches(criteria.failAsset, assetID)
@@ -3049,8 +3199,8 @@ function Resolvers.RecordSurvivedFallDamage(damageAmount)
 				recorded = Resolvers.SetCriteriaProgress(criteria.id, 1, true, GetProgressCharacterName()) or recorded;
 			end
 		end
-		if recorded and Achievements.RefreshCriteriaAchievements then
-			Achievements.RefreshCriteriaAchievements(true);
+		if recorded then
+			Resolvers.ScheduleCriteriaTypesRefresh(CRITERIA_TYPE.MAX_DISTANCE_FALLEN_WITHOUT_DYING, true, 0.15, "fall-damage");
 		end
 	end;
 
@@ -3676,7 +3826,29 @@ local function BuildSoulOfIronFailureAuraNameLookup()
 	return BuildAuraNameLookup(SOUL_OF_IRON_FAILURE_AURA_SPELL_IDS, { "Tarnished Soul", "Perished at Level" });
 end
 
-local function PlayerHasAnyAuraSpellOrName(spellIDs, cacheField, buildNameLookup)
+local function PlayerHasAnyAuraSpellOrName(spellIDs, cacheField, buildNameLookup, auraSnapshot)
+	if auraSnapshot then
+		local auraSpellIDs = auraSnapshot.spellIDs or {};
+		for _, spellID in ipairs(spellIDs) do
+			spellID = tonumber(spellID) or 0;
+			if spellID ~= 0 and auraSpellIDs[spellID] then
+				return true;
+			end
+		end
+
+		Private.state = Private.state or {};
+		Private.state[cacheField] = Private.state[cacheField] or buildNameLookup();
+		local names = Private.state[cacheField];
+		local auraNames = auraSnapshot.names or {};
+		for name in pairs(names) do
+			if auraNames[name] then
+				return true;
+			end
+		end
+
+		return false;
+	end
+
 	for _, spellID in ipairs(spellIDs) do
 		if Resolvers.PlayerHasAuraSpell(spellID) == true then
 			return true;
@@ -3702,15 +3874,15 @@ local function PlayerHasAnyAuraSpellOrName(spellIDs, cacheField, buildNameLookup
 	return false;
 end
 
-function Resolvers.PlayerHasSoulOfIronTerminated()
-	return PlayerHasAnyAuraSpellOrName(SOUL_OF_IRON_FAILURE_AURA_SPELL_IDS, "soulOfIronFailureAuraNames", BuildSoulOfIronFailureAuraNameLookup) == true;
+function Resolvers.PlayerHasSoulOfIronTerminated(auraSnapshot)
+	return PlayerHasAnyAuraSpellOrName(SOUL_OF_IRON_FAILURE_AURA_SPELL_IDS, "soulOfIronFailureAuraNames", BuildSoulOfIronFailureAuraNameLookup, auraSnapshot) == true;
 end
 
-function Resolvers.PlayerHasSoulOfIron()
-	if Resolvers.PlayerHasSoulOfIronTerminated() then
+function Resolvers.PlayerHasSoulOfIron(auraSnapshot)
+	if Resolvers.PlayerHasSoulOfIronTerminated(auraSnapshot) then
 		return false;
 	end
-	return PlayerHasAnyAuraSpellOrName(SOUL_OF_IRON_AURA_SPELL_IDS, "soulOfIronAuraNames", BuildSoulOfIronAuraNameLookup) == true;
+	return PlayerHasAnyAuraSpellOrName(SOUL_OF_IRON_AURA_SPELL_IDS, "soulOfIronAuraNames", BuildSoulOfIronAuraNameLookup, auraSnapshot) == true;
 end
 
 local function HasSavedCriteriaAssetProgress(criteriaType, assetID)
@@ -3946,54 +4118,69 @@ function Resolvers.RecordPlayerAuraCriteria(unit)
 	Private.state = Private.state or {};
 	Private.state.criteriaAuraStates = Private.state.criteriaAuraStates or {};
 	local auraStates = Private.state.criteriaAuraStates;
+	local auraSnapshot = Resolvers.BuildPlayerAuraSnapshot("player");
+	local auraSpellIDs = auraSnapshot.spellIDs or {};
+	local auraCriteria = Resolvers.GetAuraCriteriaCache();
 	local checkedAuras = {};
 	local recordedAuraGains = {};
+	local refreshTypes;
+	local needsFullRefresh = false;
 	local recorded = false;
-	local hasSoulOfIron = Resolvers.PlayerHasSoulOfIron() == true;
+	local hasSoulOfIron = Resolvers.PlayerHasSoulOfIron(auraSnapshot) == true;
 	if Private.state.lastSoulOfIronAura ~= hasSoulOfIron then
 		Private.state.lastSoulOfIronAura = hasSoulOfIron;
+		needsFullRefresh = true;
 		recorded = true;
 	end
 
-	for _, criteria in pairs(CRITERIA_DATA) do
-		if Resolvers.IsClientRecordableCriteria(criteria) then
-			if criteria.type == CRITERIA_TYPE.GAIN_AURA and criteria.asset and criteria.asset ~= 0 then
-				local auraSpellID = criteria.asset;
-				if checkedAuras[auraSpellID] == nil then
-					checkedAuras[auraSpellID] = Resolvers.PlayerHasAuraSpell(auraSpellID) == true;
-				end
-				if checkedAuras[auraSpellID] and auraStates[auraSpellID] ~= true and not recordedAuraGains[auraSpellID] then
-					recordedAuraGains[auraSpellID] = true;
-					local ctx = {
-						mapID = GetCurrentMapID(),
-						zoneAreaID = GetCurrentZoneAreaID and GetCurrentZoneAreaID() or nil,
-						sourceRaceID = GetPlayerRaceID and GetPlayerRaceID() or nil,
-					};
-					recorded = Resolvers.RecordCriteriaProgress(CRITERIA_TYPE.GAIN_AURA, auraSpellID, 1, ctx, "gain-aura-" .. tostring(auraSpellID)) or recorded;
+	for _, criteria in ipairs(auraCriteria.gains) do
+		local auraSpellID = tonumber(criteria.asset) or 0;
+		if auraSpellID ~= 0 then
+			if checkedAuras[auraSpellID] == nil then
+				checkedAuras[auraSpellID] = auraSpellIDs[auraSpellID] == true;
+			end
+			if checkedAuras[auraSpellID] and auraStates[auraSpellID] ~= true and not recordedAuraGains[auraSpellID] then
+				recordedAuraGains[auraSpellID] = true;
+				local ctx = {
+					mapID = GetCurrentMapID(),
+					zoneAreaID = GetCurrentZoneAreaID and GetCurrentZoneAreaID() or nil,
+					sourceRaceID = GetPlayerRaceID and GetPlayerRaceID() or nil,
+				};
+				if Resolvers.RecordCriteriaProgress(CRITERIA_TYPE.GAIN_AURA, auraSpellID, 1, ctx, "gain-aura-" .. tostring(auraSpellID)) then
+					recorded = true;
+					refreshTypes = Resolvers.MarkCriteriaRefreshType(refreshTypes, CRITERIA_TYPE.GAIN_AURA);
 				end
 			end
+		end
+	end
 
-			local startSpellID = criteria.startAsset ~= 0 and criteria.startAsset or criteria.asset;
-			if startSpellID and startSpellID ~= 0 and (criteria.startEvent == CRITERIA_START_EVENT.GAIN_AURA or criteria.startEvent == CRITERIA_START_EVENT.GAIN_AURA_EFFECT) then
-				if checkedAuras[startSpellID] == nil then
-					checkedAuras[startSpellID] = Resolvers.PlayerHasAuraSpell(startSpellID) == true;
-				end
-				if checkedAuras[startSpellID] then
-					recorded = Resolvers.StartCriteriaAttempt(criteria) or recorded;
-				end
+	for _, criteria in ipairs(auraCriteria.starts) do
+		local startSpellID = criteria.startAsset ~= 0 and criteria.startAsset or criteria.asset;
+		startSpellID = tonumber(startSpellID) or 0;
+		if startSpellID ~= 0 then
+			if checkedAuras[startSpellID] == nil then
+				checkedAuras[startSpellID] = auraSpellIDs[startSpellID] == true;
 			end
+			if checkedAuras[startSpellID] and Resolvers.StartCriteriaAttempt(criteria) then
+				recorded = true;
+				refreshTypes = Resolvers.MarkCriteriaRefreshType(refreshTypes, criteria.type);
+			end
+		end
+	end
 
-			local failSpellID = criteria.failAsset ~= 0 and criteria.failAsset or criteria.asset;
-			if failSpellID and failSpellID ~= 0 and (criteria.failEvent == CRITERIA_FAIL_EVENT.GAIN_AURA or criteria.failEvent == CRITERIA_FAIL_EVENT.GAIN_AURA_EFFECT or criteria.failEvent == CRITERIA_FAIL_EVENT.LOSE_AURA) then
-				if checkedAuras[failSpellID] == nil then
-					checkedAuras[failSpellID] = Resolvers.PlayerHasAuraSpell(failSpellID) == true;
-				end
-				local hasAura = checkedAuras[failSpellID];
-				local lostAura = criteria.failEvent == CRITERIA_FAIL_EVENT.LOSE_AURA and auraStates[failSpellID] == true and hasAura == false;
-				local gainedAura = criteria.failEvent ~= CRITERIA_FAIL_EVENT.LOSE_AURA and hasAura == true;
-				if lostAura or gainedAura then
-					recorded = Resolvers.RecordCriteriaFail(criteria.failEvent, failSpellID) or recorded;
-				end
+	for _, criteria in ipairs(auraCriteria.fails) do
+		local failSpellID = criteria.failAsset ~= 0 and criteria.failAsset or criteria.asset;
+		failSpellID = tonumber(failSpellID) or 0;
+		if failSpellID ~= 0 then
+			if checkedAuras[failSpellID] == nil then
+				checkedAuras[failSpellID] = auraSpellIDs[failSpellID] == true;
+			end
+			local hasAura = checkedAuras[failSpellID];
+			local lostAura = criteria.failEvent == CRITERIA_FAIL_EVENT.LOSE_AURA and auraStates[failSpellID] == true and hasAura == false;
+			local gainedAura = criteria.failEvent ~= CRITERIA_FAIL_EVENT.LOSE_AURA and hasAura == true;
+			if (lostAura or gainedAura) and Resolvers.RecordCriteriaFail(criteria.failEvent, failSpellID) then
+				recorded = true;
+				refreshTypes = Resolvers.MarkCriteriaRefreshType(refreshTypes, criteria.type);
 			end
 		end
 	end
@@ -4002,8 +4189,14 @@ function Resolvers.RecordPlayerAuraCriteria(unit)
 		auraStates[spellID] = hasAura;
 	end
 
-	if recorded and Achievements.RefreshCriteriaAchievements then
-		Achievements.RefreshCriteriaAchievements(true);
+	if recorded and needsFullRefresh then
+		if Achievements.ScheduleCriteriaRefresh then
+			Achievements.ScheduleCriteriaRefresh(true, 0.35, "unit-aura");
+		elseif Achievements.RefreshCriteriaAchievements then
+			Achievements.RefreshCriteriaAchievements(true);
+		end
+	elseif recorded then
+		Resolvers.ScheduleCriteriaTypesRefresh(refreshTypes or CRITERIA_TYPE.GAIN_AURA, true, 0.35, "unit-aura");
 	end
 	return recorded;
 end
@@ -6695,7 +6888,7 @@ local function MatchesCriteriaAsset(criteria, assetID, criteriaType)
 end
 
 function Resolvers.CriteriaTypeAssetAllowsDecrement(criteriaType, assetID)
-	for _, criteria in pairs(CRITERIA_DATA) do
+	for _, criteria in ipairs(Resolvers.GetRecordableCriteriaByType(criteriaType)) do
 		if criteria.type == criteriaType and MatchesCriteriaAsset(criteria, assetID, criteriaType) and Resolvers.HasCriteriaFlag(criteria, CRITERIA_FLAGS.ALLOW_DECREMENT) then
 			return true;
 		end
@@ -6720,7 +6913,7 @@ RecordCriteriaEvent = function(criteriaType, assetID, ctx, dedupeKey, amount)
 	end
 
 	local characterName = GetProgressCharacterName();
-	for _, criteria in pairs(CRITERIA_DATA) do
+	for _, criteria in ipairs(Resolvers.GetRecordableCriteriaByType(criteriaType)) do
 		if criteria.type == criteriaType
 			and Resolvers.IsClientRecordableCriteria(criteria)
 			and Resolvers.UsesPerCriteriaProgress(criteria)
@@ -6846,6 +7039,9 @@ local function HandleCombatLogCriteria()
 	local damageAmount;
 	local healingAmount;
 	local recorded = false;
+	local refreshTypes;
+	local refreshDelay = 0.75;
+	local needsFullRefresh = false;
 	if subevent == "SWING_DAMAGE" then
 		spellID = nil;
 		damageAmount = tonumber(eventArg1) or 0;
@@ -6861,8 +7057,9 @@ local function HandleCombatLogCriteria()
 		damageAmount = tonumber(environmentalDamageAmount) or 0;
 	end
 
-	if Resolvers.RecordSoulOfIronNaxxCombatLog then
-		recorded = Resolvers.RecordSoulOfIronNaxxCombatLog(subevent, sourceGUID, sourceFlags, destGUID, destFlags) or recorded;
+	if Resolvers.RecordSoulOfIronNaxxCombatLog and Resolvers.RecordSoulOfIronNaxxCombatLog(subevent, sourceGUID, sourceFlags, destGUID, destFlags) then
+		recorded = true;
+		needsFullRefresh = true;
 	end
 
 	if DestIsPlayer(destGUID, destFlags) and sourceGUID and sourceGUID ~= "" and (string.find(subevent or "", "_DAMAGE") or subevent == "SWING_DAMAGE" or subevent == "RANGE_DAMAGE") then
@@ -6883,77 +7080,170 @@ local function HandleCombatLogCriteria()
 	if SourceIsPlayerControlled(sourceGUID, sourceFlags) then
 		local ctx = BuildKillCombatContext(sourceGUID, sourceFlags, destGUID, destFlags, GetCreatureIDFromGUID(destGUID));
 		if damageAmount and damageAmount > 0 then
-			recorded = Resolvers.RecordCriteriaProgress(CRITERIA_TYPE.DAMAGE_DEALT, 0, damageAmount, ctx, nil) or recorded;
-			recorded = Resolvers.SetCriteriaAssetProgressMax(CRITERIA_TYPE.HIGHEST_DAMAGE_IN_SINGLE_ABILITY, 0, damageAmount, GetProgressCharacterName()) or recorded;
+			if Resolvers.RecordCriteriaProgress(CRITERIA_TYPE.DAMAGE_DEALT, 0, damageAmount, ctx, nil) then
+				recorded = true;
+				refreshTypes = Resolvers.MarkCriteriaRefreshType(refreshTypes, CRITERIA_TYPE.DAMAGE_DEALT);
+			end
+			if Resolvers.SetCriteriaAssetProgressMax(CRITERIA_TYPE.HIGHEST_DAMAGE_IN_SINGLE_ABILITY, 0, damageAmount, GetProgressCharacterName()) then
+				recorded = true;
+				refreshTypes = Resolvers.MarkCriteriaRefreshType(refreshTypes, CRITERIA_TYPE.HIGHEST_DAMAGE_IN_SINGLE_ABILITY);
+			end
 		end
 		if healingAmount and healingAmount > 0 then
-			recorded = Resolvers.RecordCriteriaProgress(CRITERIA_TYPE.HEALING_DONE, 0, healingAmount, ctx, nil) or recorded;
-			recorded = Resolvers.SetCriteriaAssetProgressMax(CRITERIA_TYPE.LARGEST_HEAL_CAST, 0, healingAmount, GetProgressCharacterName()) or recorded;
+			if Resolvers.RecordCriteriaProgress(CRITERIA_TYPE.HEALING_DONE, 0, healingAmount, ctx, nil) then
+				recorded = true;
+				refreshTypes = Resolvers.MarkCriteriaRefreshType(refreshTypes, CRITERIA_TYPE.HEALING_DONE);
+			end
+			if Resolvers.SetCriteriaAssetProgressMax(CRITERIA_TYPE.LARGEST_HEAL_CAST, 0, healingAmount, GetProgressCharacterName()) then
+				recorded = true;
+				refreshTypes = Resolvers.MarkCriteriaRefreshType(refreshTypes, CRITERIA_TYPE.LARGEST_HEAL_CAST);
+			end
 		end
 	end
 
 	if DestIsPlayer(destGUID, destFlags) then
 		if damageAmount and damageAmount > 0 then
-			recorded = Resolvers.RecordCriteriaProgress(CRITERIA_TYPE.TOTAL_DAMAGE_TAKEN, 0, damageAmount, {}, nil) or recorded;
-			recorded = Resolvers.SetCriteriaAssetProgressMax(CRITERIA_TYPE.MOST_DAMAGE_TAKEN_IN_SINGLE_HIT, 0, damageAmount, GetProgressCharacterName()) or recorded;
+			if Resolvers.RecordCriteriaProgress(CRITERIA_TYPE.TOTAL_DAMAGE_TAKEN, 0, damageAmount, {}, nil) then
+				recorded = true;
+				refreshTypes = Resolvers.MarkCriteriaRefreshType(refreshTypes, CRITERIA_TYPE.TOTAL_DAMAGE_TAKEN);
+			end
+			if Resolvers.SetCriteriaAssetProgressMax(CRITERIA_TYPE.MOST_DAMAGE_TAKEN_IN_SINGLE_HIT, 0, damageAmount, GetProgressCharacterName()) then
+				recorded = true;
+				refreshTypes = Resolvers.MarkCriteriaRefreshType(refreshTypes, CRITERIA_TYPE.MOST_DAMAGE_TAKEN_IN_SINGLE_HIT);
+			end
 		end
 		if healingAmount and healingAmount > 0 then
-			recorded = Resolvers.RecordCriteriaProgress(CRITERIA_TYPE.TOTAL_HEALING_RECEIVED, 0, healingAmount, {}, nil) or recorded;
-			recorded = Resolvers.SetCriteriaAssetProgressMax(CRITERIA_TYPE.LARGEST_HEAL_RECEIVED, 0, healingAmount, GetProgressCharacterName()) or recorded;
+			if Resolvers.RecordCriteriaProgress(CRITERIA_TYPE.TOTAL_HEALING_RECEIVED, 0, healingAmount, {}, nil) then
+				recorded = true;
+				refreshTypes = Resolvers.MarkCriteriaRefreshType(refreshTypes, CRITERIA_TYPE.TOTAL_HEALING_RECEIVED);
+			end
+			if Resolvers.SetCriteriaAssetProgressMax(CRITERIA_TYPE.LARGEST_HEAL_RECEIVED, 0, healingAmount, GetProgressCharacterName()) then
+				recorded = true;
+				refreshTypes = Resolvers.MarkCriteriaRefreshType(refreshTypes, CRITERIA_TYPE.LARGEST_HEAL_RECEIVED);
+			end
 		end
 	end
 
 	if subevent == "PARTY_KILL" and SourceIsPlayerGroup(sourceGUID, sourceFlags) then
 		local creatureID = GetCreatureIDFromGUID(destGUID);
 		local ctx = BuildKillCombatContext(sourceGUID, sourceFlags, destGUID, destFlags, creatureID);
-		recorded = Resolvers.RecordSoulOfIronBossKill(creatureID) or recorded;
+		if Resolvers.RecordSoulOfIronBossKill(creatureID) then
+			recorded = true;
+			needsFullRefresh = true;
+		end
 		Resolvers.RecordCriteriaStart(CRITERIA_START_EVENT.KILL_NPC, creatureID);
-		recorded = RecordCombatCriteriaAsset(CRITERIA_TYPE.KILL_NPC, creatureID, 1) or recorded;
-		recorded = RecordCriteriaEvent(CRITERIA_TYPE.KILL_NPC, creatureID, ctx) or recorded;
+		if RecordCombatCriteriaAsset(CRITERIA_TYPE.KILL_NPC, creatureID, 1) then
+			recorded = true;
+			refreshTypes = Resolvers.MarkCriteriaRefreshType(refreshTypes, CRITERIA_TYPE.KILL_NPC);
+			refreshDelay = 0.15;
+		end
+		if RecordCriteriaEvent(CRITERIA_TYPE.KILL_NPC, creatureID, ctx) then
+			recorded = true;
+			refreshTypes = Resolvers.MarkCriteriaRefreshType(refreshTypes, CRITERIA_TYPE.KILL_NPC);
+			refreshDelay = 0.15;
+		end
 		if creatureID then
-			recorded = RecordCriteriaEvent(CRITERIA_TYPE.KILL_ANY_NPC, 0, ctx) or recorded;
+			if RecordCriteriaEvent(CRITERIA_TYPE.KILL_ANY_NPC, 0, ctx) then
+				recorded = true;
+				refreshTypes = Resolvers.MarkCriteriaRefreshType(refreshTypes, CRITERIA_TYPE.KILL_ANY_NPC);
+				refreshDelay = 0.15;
+			end
 		end
 		if DestIsPlayer(destGUID, destFlags) then
 			Resolvers.RecordCriteriaStart(CRITERIA_START_EVENT.KILL_PLAYER, 0);
 			if ctx.zoneAreaID then
-				recorded = RecordCriteriaEvent(CRITERIA_TYPE.KILL_PLAYER_IN_AREA, ctx.zoneAreaID, ctx) or recorded;
+				if RecordCriteriaEvent(CRITERIA_TYPE.KILL_PLAYER_IN_AREA, ctx.zoneAreaID, ctx) then
+					recorded = true;
+					refreshTypes = Resolvers.MarkCriteriaRefreshType(refreshTypes, CRITERIA_TYPE.KILL_PLAYER_IN_AREA);
+					refreshDelay = 0.15;
+				end
 			end
 			if ctx.targetClassID then
-				recorded = RecordCriteriaEvent(CRITERIA_TYPE.KILLING_BLOW_TO_CLASS, ctx.targetClassID, ctx) or recorded;
+				if RecordCriteriaEvent(CRITERIA_TYPE.KILLING_BLOW_TO_CLASS, ctx.targetClassID, ctx) then
+					recorded = true;
+					refreshTypes = Resolvers.MarkCriteriaRefreshType(refreshTypes, CRITERIA_TYPE.KILLING_BLOW_TO_CLASS);
+					refreshDelay = 0.15;
+				end
 			end
 			if ctx.targetRaceID then
-				recorded = RecordCriteriaEvent(CRITERIA_TYPE.KILLING_BLOW_TO_RACE, ctx.targetRaceID, ctx) or recorded;
+				if RecordCriteriaEvent(CRITERIA_TYPE.KILLING_BLOW_TO_RACE, ctx.targetRaceID, ctx) then
+					recorded = true;
+					refreshTypes = Resolvers.MarkCriteriaRefreshType(refreshTypes, CRITERIA_TYPE.KILLING_BLOW_TO_RACE);
+					refreshDelay = 0.15;
+				end
 			end
-			recorded = RecordCriteriaEvent(CRITERIA_TYPE.HONORABLE_KILL, 0, ctx) or recorded;
-			recorded = RecordCriteriaEvent(CRITERIA_TYPE.KILLING_BLOW, 0, ctx) or recorded;
-			recorded = RecordCriteriaEvent(CRITERIA_TYPE.KILL_PLAYER_NO_HONOR_CHECK, 0, ctx) or recorded;
+			if RecordCriteriaEvent(CRITERIA_TYPE.HONORABLE_KILL, 0, ctx) then
+				recorded = true;
+				refreshTypes = Resolvers.MarkCriteriaRefreshType(refreshTypes, CRITERIA_TYPE.HONORABLE_KILL);
+				refreshDelay = 0.15;
+			end
+			if RecordCriteriaEvent(CRITERIA_TYPE.KILLING_BLOW, 0, ctx) then
+				recorded = true;
+				refreshTypes = Resolvers.MarkCriteriaRefreshType(refreshTypes, CRITERIA_TYPE.KILLING_BLOW);
+				refreshDelay = 0.15;
+			end
+			if RecordCriteriaEvent(CRITERIA_TYPE.KILL_PLAYER_NO_HONOR_CHECK, 0, ctx) then
+				recorded = true;
+				refreshTypes = Resolvers.MarkCriteriaRefreshType(refreshTypes, CRITERIA_TYPE.KILL_PLAYER_NO_HONOR_CHECK);
+				refreshDelay = 0.15;
+			end
 		end
 	elseif subevent == "SPELL_CAST_SUCCESS" and SourceIsPlayerControlled(sourceGUID, sourceFlags) then
 		Resolvers.RecordCriteriaStart(CRITERIA_START_EVENT.CAST_SPELL, spellID);
 		Resolvers.RecordCriteriaFail(CRITERIA_FAIL_EVENT.CAST_SPELL, spellID);
-		recorded = RecordCombatCriteriaAsset(CRITERIA_TYPE.CAST_SPELL, spellID, 1, 0.05) or recorded;
-		recorded = RecordCriteriaEvent(CRITERIA_TYPE.CAST_SPELL, spellID, BuildKillCombatContext(sourceGUID, sourceFlags, destGUID, destFlags, GetCreatureIDFromGUID(destGUID)), "cast-" .. tostring(spellID)) or recorded;
+		if RecordCombatCriteriaAsset(CRITERIA_TYPE.CAST_SPELL, spellID, 1, 0.05) then
+			recorded = true;
+			refreshTypes = Resolvers.MarkCriteriaRefreshType(refreshTypes, CRITERIA_TYPE.CAST_SPELL);
+			refreshDelay = 0.15;
+		end
+		if RecordCriteriaEvent(CRITERIA_TYPE.CAST_SPELL, spellID, BuildKillCombatContext(sourceGUID, sourceFlags, destGUID, destFlags, GetCreatureIDFromGUID(destGUID)), "cast-" .. tostring(spellID)) then
+			recorded = true;
+			refreshTypes = Resolvers.MarkCriteriaRefreshType(refreshTypes, CRITERIA_TYPE.CAST_SPELL);
+			refreshDelay = 0.15;
+		end
 		if spellID and destGUID and destGUID ~= "" then
 			local ctx = BuildKillCombatContext(sourceGUID, sourceFlags, destGUID, destFlags, GetCreatureIDFromGUID(destGUID));
-			recorded = RecordCriteriaEvent(CRITERIA_TYPE.LAND_TARGETED_SPELL, spellID, ctx) or recorded;
+			if RecordCriteriaEvent(CRITERIA_TYPE.LAND_TARGETED_SPELL, spellID, ctx) then
+				recorded = true;
+				refreshTypes = Resolvers.MarkCriteriaRefreshType(refreshTypes, CRITERIA_TYPE.LAND_TARGETED_SPELL);
+				refreshDelay = 0.15;
+			end
 		end
 	elseif subevent == "ENVIRONMENTAL_DAMAGE" and DestIsPlayer(destGUID, destFlags) and type(environmentalType) == "string" then
 		lastEnvironmentalDamageType = environmentalType;
 		lastEnvironmentalDamageAt = GetTime();
 		if environmentalType == "Falling" then
-			recorded = Resolvers.RecordSurvivedFallDamage(damageAmount) or recorded;
+			if Resolvers.RecordSurvivedFallDamage(damageAmount) then
+				recorded = true;
+				refreshTypes = Resolvers.MarkCriteriaRefreshType(refreshTypes, CRITERIA_TYPE.MAX_DISTANCE_FALLEN_WITHOUT_DYING);
+				refreshDelay = 0.35;
+			end
 		end
 	end
 
 	if spellID and INCOMING_SPELL_EVENTS[subevent] and DestIsPlayer(destGUID, destFlags) then
 		Resolvers.RecordCriteriaStart(CRITERIA_START_EVENT.HAVE_SPELL_CAST_ON_YOU, spellID);
 		Resolvers.RecordCriteriaFail(CRITERIA_FAIL_EVENT.HAVE_SPELL_CAST_ON_YOU, spellID);
-		recorded = RecordCombatCriteriaAsset(CRITERIA_TYPE.HAVE_SPELL_CAST_ON_YOU, spellID, 1, 0.2) or recorded;
-		recorded = RecordCriteriaEvent(CRITERIA_TYPE.HAVE_SPELL_CAST_ON_YOU, spellID, BuildKillCombatContext(sourceGUID, sourceFlags, destGUID, destFlags, GetCreatureIDFromGUID(sourceGUID)), "incoming-" .. tostring(spellID)) or recorded;
+		if RecordCombatCriteriaAsset(CRITERIA_TYPE.HAVE_SPELL_CAST_ON_YOU, spellID, 1, 0.2) then
+			recorded = true;
+			refreshTypes = Resolvers.MarkCriteriaRefreshType(refreshTypes, CRITERIA_TYPE.HAVE_SPELL_CAST_ON_YOU);
+			refreshDelay = 0.15;
+		end
+		if RecordCriteriaEvent(CRITERIA_TYPE.HAVE_SPELL_CAST_ON_YOU, spellID, BuildKillCombatContext(sourceGUID, sourceFlags, destGUID, destFlags, GetCreatureIDFromGUID(sourceGUID)), "incoming-" .. tostring(spellID)) then
+			recorded = true;
+			refreshTypes = Resolvers.MarkCriteriaRefreshType(refreshTypes, CRITERIA_TYPE.HAVE_SPELL_CAST_ON_YOU);
+			refreshDelay = 0.15;
+		end
 	end
 
-	if recorded and Achievements.RefreshCriteriaAchievements then
-		Achievements.RefreshCriteriaAchievements(true);
+	if recorded and needsFullRefresh then
+		if Achievements.ScheduleCriteriaRefresh then
+			Achievements.ScheduleCriteriaRefresh(true, refreshDelay, "combat-log");
+		elseif Achievements.RefreshCriteriaAchievements then
+			Achievements.RefreshCriteriaAchievements(true);
+		end
+	elseif recorded then
+		Resolvers.ScheduleCriteriaTypesRefresh(refreshTypes, true, refreshDelay, "combat-log");
 	end
 
 	return recorded;
