@@ -615,6 +615,29 @@ function Resolvers.GetRecordableCriteriaByType(criteriaType)
 	return Resolvers.recordableCriteriaByType[criteriaType] or Resolvers.GetEmptyCriteriaList();
 end
 
+function Resolvers.GetPerCriteriaRecordableCriteriaByType(criteriaType)
+	criteriaType = tonumber(criteriaType);
+	if not criteriaType then
+		return Resolvers.GetEmptyCriteriaList();
+	end
+
+	if not Resolvers.perCriteriaRecordableCriteriaByType then
+		local cache = {};
+		for _, criteria in pairs(CRITERIA_DATA) do
+			if Resolvers.IsClientRecordableCriteria(criteria) and Resolvers.UsesPerCriteriaProgress(criteria) then
+				local currentType = tonumber(criteria.type);
+				if currentType then
+					cache[currentType] = cache[currentType] or {};
+					cache[currentType][#cache[currentType] + 1] = criteria;
+				end
+			end
+		end
+		Resolvers.perCriteriaRecordableCriteriaByType = cache;
+	end
+
+	return Resolvers.perCriteriaRecordableCriteriaByType[criteriaType] or Resolvers.GetEmptyCriteriaList();
+end
+
 function Resolvers.GetCriteriaByStartEvent(startEvent)
 	startEvent = tonumber(startEvent);
 	if not startEvent then
@@ -6897,6 +6920,12 @@ function Resolvers.CriteriaTypeAssetAllowsDecrement(criteriaType, assetID)
 end
 
 RecordCriteriaEvent = function(criteriaType, assetID, ctx, dedupeKey, amount)
+	criteriaType = tonumber(criteriaType);
+	assetID = tonumber(assetID) or 0;
+	if not criteriaType then
+		return false;
+	end
+
 	local recorded = false;
 	local now = GetTime();
 	local incrementAmount = tonumber(amount) or (ctx and tonumber(ctx.criteriaAmount)) or 1;
@@ -6913,11 +6942,8 @@ RecordCriteriaEvent = function(criteriaType, assetID, ctx, dedupeKey, amount)
 	end
 
 	local characterName = GetProgressCharacterName();
-	for _, criteria in ipairs(Resolvers.GetRecordableCriteriaByType(criteriaType)) do
-		if criteria.type == criteriaType
-			and Resolvers.IsClientRecordableCriteria(criteria)
-			and Resolvers.UsesPerCriteriaProgress(criteria)
-			and MatchesCriteriaAsset(criteria, assetID, criteriaType)
+	for _, criteria in ipairs(Resolvers.GetPerCriteriaRecordableCriteriaByType(criteriaType)) do
+		if MatchesCriteriaAsset(criteria, assetID, criteriaType)
 			and Resolvers.CriteriaAttemptActive(criteria)
 			and EvaluateCriteriaModifier(criteria, ctx)
 		then
@@ -7557,10 +7583,10 @@ local function ResolveEligibleChildren(context)
 	for _, childID in ipairs(childIDs) do
 		local childResult = ResolveChildCriteriaTree(context, childID);
 		if childResult and childResult.eligible ~= false then
-			tinsert(childResults, {
+			childResults[#childResults + 1] = {
 				criteriaTree = CRITERIA_TREE_DATA[childID],
 				result = childResult,
-			});
+			};
 		end
 	end
 
@@ -7599,9 +7625,14 @@ local function ResolveCompletedChildCount(context, requireAllChildren, source)
 end
 
 local function ResolveSingle(context)
-	local childResults = ResolveEligibleChildren(context);
-	if #childResults > 0 then
-		return childResults[1].result;
+	local childIDs = CRITERIA_TREE_CHILDREN[context.criteriaTreeID];
+	if childIDs and #childIDs > 0 then
+		for _, childID in ipairs(childIDs) do
+			local childResult = ResolveChildCriteriaTree(context, childID);
+			if childResult and childResult.eligible ~= false then
+				return childResult;
+			end
+		end
 	end
 
 	return ResolveCriteriaLeaf(context);

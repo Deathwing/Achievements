@@ -44,6 +44,8 @@ local pendingCriteriaRefreshTypes;
 local runningScheduledCriteriaRefresh;
 local allAchievementIDs;
 local achievementCriteriaTypeCache;
+local displayableCriteriaIndicesCache = {};
+local criteriaTreeFlagCache = {};
 
 local function GetDebugMilliseconds()
 	return debugprofilestop();
@@ -73,25 +75,39 @@ end
 
 local function AddFlag(flags, flag)
 	flags = flags or 0;
-	if HasAchievementFlag({ flags = flags }, flag) then
+	if bit.band(flags, flag) == flag then
 		return flags;
 	end
 	return bit.bor(flags, flag);
 end
 
 local function CriteriaTreeHasFlag(criteriaTreeID, flag)
+	if not criteriaTreeID then
+		return false;
+	end
+
+	criteriaTreeFlagCache[flag] = criteriaTreeFlagCache[flag] or {};
+	local flagCache = criteriaTreeFlagCache[flag];
+	if flagCache[criteriaTreeID] ~= nil then
+		return flagCache[criteriaTreeID];
+	end
+
 	local criteriaTree = criteriaTreeID and CRITERIA_TREE_DATA[criteriaTreeID];
 	if not criteriaTree then
+		flagCache[criteriaTreeID] = false;
 		return false;
 	end
 	if HasCriteriaTreeFlag(criteriaTree, flag) then
+		flagCache[criteriaTreeID] = true;
 		return true;
 	end
 	for _, childID in ipairs(CRITERIA_TREE_CHILDREN[criteriaTreeID] or {}) do
 		if CriteriaTreeHasFlag(childID, flag) then
+			flagCache[criteriaTreeID] = true;
 			return true;
 		end
 	end
+	flagCache[criteriaTreeID] = false;
 	return false;
 end
 
@@ -170,15 +186,27 @@ local function GetStatisticElapsedDays()
 end
 
 local function GetDisplayableCriteriaIndices(achievementID)
+	if not achievementID then
+		return nil;
+	end
+	if displayableCriteriaIndicesCache[achievementID] ~= nil then
+		return displayableCriteriaIndicesCache[achievementID] or nil;
+	end
+
 	local criteria = CRITERIA_BY_ACHIEVEMENT[achievementID];
-	if not criteria then return nil; end
+	if not criteria then
+		displayableCriteriaIndicesCache[achievementID] = false;
+		return nil;
+	end
+
 	local result = {};
 	for i, criteriaTreeID in ipairs(criteria) do
 		local criteriaTree = CRITERIA_TREE_DATA[criteriaTreeID];
 		if not criteriaTree or not HasCriteriaTreeFlag(criteriaTree, CRITERIA_TREE_FLAG_DO_NOT_DISPLAY) then
-			tinsert(result, i);
+			result[#result + 1] = i;
 		end
 	end
+	displayableCriteriaIndicesCache[achievementID] = result;
 	return result;
 end
 
