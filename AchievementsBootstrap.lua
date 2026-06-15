@@ -31,8 +31,19 @@ eventFrame:RegisterEvent("SPELLS_CHANGED");
 pcall(eventFrame.RegisterEvent, eventFrame, "LEARNED_SPELL_IN_TAB");
 pcall(eventFrame.RegisterEvent, eventFrame, "PLAYER_TALENT_UPDATE");
 pcall(eventFrame.RegisterEvent, eventFrame, "ACTIVE_TALENT_GROUP_CHANGED");
-eventFrame:RegisterEvent("UNIT_AURA");
-eventFrame:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED");
+-- UNIT_AURA / UNIT_SPELLCAST_SUCCEEDED fire for every visible unit (target,
+-- focus, party/raid members, nameplates). In raids that is a constant stream of
+-- dispatches that all get discarded because the handlers only act on "player".
+-- Filter them to the player unit so the OnEvent handler is never even entered
+-- for other units. Fall back to the unfiltered registration on the rare client
+-- that lacks RegisterUnitEvent.
+if eventFrame.RegisterUnitEvent then
+	eventFrame:RegisterUnitEvent("UNIT_AURA", "player");
+	eventFrame:RegisterUnitEvent("UNIT_SPELLCAST_SUCCEEDED", "player");
+else
+	eventFrame:RegisterEvent("UNIT_AURA");
+	eventFrame:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED");
+end
 eventFrame:RegisterEvent("SKILL_LINES_CHANGED");
 eventFrame:RegisterEvent("UPDATE_FACTION");
 eventFrame:RegisterEvent("BAG_UPDATE_DELAYED");

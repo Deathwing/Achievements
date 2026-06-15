@@ -7060,6 +7060,41 @@ end
 
 local function HandleCombatLogCriteria()
 	local _, subevent, _, sourceGUID, _, sourceFlags, _, destGUID, _, destFlags, _, eventArg1, _, _, eventArg4, eventArg5 = CombatLogGetCurrentEventInfo();
+
+	-- Soul of Iron Naxx tracking is the only consumer that cares about lines
+	-- where the player is not involved (boss-vs-other-raider), but it is gated
+	-- behind IsCurrentNaxxramas() which is false on Era, so it stays cheap.
+	if Resolvers.RecordSoulOfIronNaxxCombatLog and Resolvers.RecordSoulOfIronNaxxCombatLog(subevent, sourceGUID, sourceFlags, destGUID, destFlags) then
+		if Achievements.ScheduleCriteriaRefresh then
+			Achievements.ScheduleCriteriaRefresh(true, 0.75, "combat-log");
+		elseif Achievements.RefreshCriteriaAchievements then
+			Achievements.RefreshCriteriaAchievements(true);
+		end
+		return true;
+	end
+
+	-- Cheap relevance gate: every combat-log line that matters to a criterion
+	-- involves either the player/group as the source (MINE/PARTY/RAID) or the
+	-- player as the destination (MINE). In a raid the combat log fires thousands
+	-- of lines per second for unrelated actors, so bail before any context
+	-- building to keep stutters down. Flag affiliation can occasionally be unset
+	-- for the player while the GUID still matches, so keep a GUID fallback.
+	local sourceMask = bit.bor(
+		COMBATLOG_OBJECT_AFFILIATION_MINE or 0x00000001,
+		COMBATLOG_OBJECT_AFFILIATION_PARTY or 0x00000002,
+		COMBATLOG_OBJECT_AFFILIATION_RAID or 0x00000004
+	);
+	local destMask = COMBATLOG_OBJECT_AFFILIATION_MINE or 0x00000001;
+	local relevant = (sourceFlags and bit.band(sourceFlags, sourceMask) ~= 0)
+		or (destFlags and bit.band(destFlags, destMask) ~= 0);
+	if not relevant then
+		local playerGUID = UnitGUID("player");
+		relevant = playerGUID ~= nil and (sourceGUID == playerGUID or destGUID == playerGUID);
+	end
+	if not relevant then
+		return false;
+	end
+
 	local spellID = eventArg1;
 	local environmentalType;
 	local damageAmount;
@@ -7081,11 +7116,6 @@ local function HandleCombatLogCriteria()
 		environmentalType = eventArg1;
 		local environmentalDamageAmount = select(13, CombatLogGetCurrentEventInfo());
 		damageAmount = tonumber(environmentalDamageAmount) or 0;
-	end
-
-	if Resolvers.RecordSoulOfIronNaxxCombatLog and Resolvers.RecordSoulOfIronNaxxCombatLog(subevent, sourceGUID, sourceFlags, destGUID, destFlags) then
-		recorded = true;
-		needsFullRefresh = true;
 	end
 
 	if DestIsPlayer(destGUID, destFlags) and sourceGUID and sourceGUID ~= "" and (string.find(subevent or "", "_DAMAGE") or subevent == "SWING_DAMAGE" or subevent == "RANGE_DAMAGE") then
