@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.4 - 2026-06-20
+
+- Fixed loot-acquisition criteria (such as fish caught and items disenchanted) counting far too fast. A single catch could be counted multiple times because it was recorded once per looted item and again on both the loot window and loot chat message; these counters now increment exactly once per catch. "Catch fish in pool" and "use object" counters are likewise counted once per source object per loot.
+- Fixed criteria progress (such as Gold Looted and emote counts) being wrongly discarded on login with "ignored modified criteria progress saved data". The saved-data integrity seal included a per-character owner string derived from APIs whose return values are not stable across the login lifecycle, so the addon could reject its own freshly written data. The seal no longer depends on those values, and existing sealed progress is preserved across the update.
+
 ## 1.0.3 - 2026-06-15
 
 - Further reduced raid stutter: combat-log criteria handling now bails out early for unrelated actors before any context building, and `UNIT_AURA`/`UNIT_SPELLCAST_SUCCEEDED` are registered for the player unit only so the event handler is no longer entered for every visible unit.

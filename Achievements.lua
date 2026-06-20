@@ -333,7 +333,16 @@ local function NormalizeIntegrityValue(value)
 	return tostring(value);
 end
 
-local function GetSavedRecordOwner(accountWide)
+-- Legacy owner string used by the 1.0.0-1.0.3 seal. It was derived from
+-- UnitFullName("player")/GetRealmName(), but those return values are not stable
+-- across the login lifecycle (realm comes back normalized vs spaced, and is
+-- sometimes unavailable early), so a record sealed mid-session would fail to
+-- validate on the next login and progress was wrongly discarded. Kept only so
+-- existing sealed records still validate (and then get re-sealed with the new,
+-- stable format). New seals no longer include any owner component: per-character
+-- data already lives in SavedVariablesPerCharacter, and the seal is only a
+-- tamper-evidence marker, not a security boundary.
+local function GetLegacySavedRecordOwner(accountWide)
 	if accountWide then
 		return "account";
 	end
@@ -357,14 +366,16 @@ local function HashSavedRecordPayload(payload)
 	return tostring(math.floor(hash));
 end
 
-local function BuildSavedRecordPayload(record, namespace, key, accountWide, ...)
+local function BuildSavedRecordPayload(record, namespace, key, ownerComponent, ...)
 	local payload = {
 		SAVED_RECORD_INTEGRITY_SECRET,
 		tostring(SAVED_RECORD_INTEGRITY_VERSION),
 		tostring(namespace or ""),
 		tostring(key or ""),
-		GetSavedRecordOwner(accountWide),
 	};
+	if ownerComponent ~= nil then
+		payload[#payload + 1] = ownerComponent;
+	end
 	for index = 1, select("#", ...) do
 		local fieldName = select(index, ...);
 		payload[#payload + 1] = tostring(fieldName) .. "=" .. NormalizeIntegrityValue(record and record[fieldName]);
@@ -372,15 +383,19 @@ local function BuildSavedRecordPayload(record, namespace, key, accountWide, ...)
 	return table.concat(payload, "|");
 end
 
-local function ComputeSavedRecordIntegrity(record, namespace, key, accountWide, ...)
-	return tostring(SAVED_RECORD_INTEGRITY_VERSION) .. ":" .. HashSavedRecordPayload(BuildSavedRecordPayload(record, namespace, key, accountWide, ...));
+local function ComputeSavedRecordIntegrity(record, namespace, key, ...)
+	return tostring(SAVED_RECORD_INTEGRITY_VERSION) .. ":" .. HashSavedRecordPayload(BuildSavedRecordPayload(record, namespace, key, nil, ...));
+end
+
+local function ComputeLegacySavedRecordIntegrity(record, namespace, key, accountWide, ...)
+	return tostring(SAVED_RECORD_INTEGRITY_VERSION) .. ":" .. HashSavedRecordPayload(BuildSavedRecordPayload(record, namespace, key, GetLegacySavedRecordOwner(accountWide), ...));
 end
 
 function Private.SealSavedRecord(record, namespace, key, accountWide, ...)
 	if type(record) ~= "table" then
 		return nil;
 	end
-	record._integrity = ComputeSavedRecordIntegrity(record, namespace, key, accountWide, ...);
+	record._integrity = ComputeSavedRecordIntegrity(record, namespace, key, ...);
 	return record._integrity;
 end
 
@@ -388,7 +403,13 @@ function Private.ValidateSavedRecord(record, namespace, key, accountWide, ...)
 	if type(record) ~= "table" then
 		return false;
 	end
-	return record._integrity == ComputeSavedRecordIntegrity(record, namespace, key, accountWide, ...);
+	if record._integrity == ComputeSavedRecordIntegrity(record, namespace, key, ...) then
+		return true;
+	end
+	-- Accept records sealed by the older owner-based format so existing progress
+	-- is preserved across the upgrade; callers re-seal with the new format on the
+	-- next write.
+	return record._integrity == ComputeLegacySavedRecordIntegrity(record, namespace, key, accountWide, ...);
 end
 
 function Private.ReportSavedIntegrityFailure(namespace)
@@ -445,7 +466,7 @@ local function SealSavedCompletion(achievementID, savedState)
 	if type(savedState) ~= "table" then
 		return nil;
 	end
-	savedState._i = ComputeSavedRecordIntegrity(savedState, "completion", achievementID, IsAccountWideAchievement(achievementID), "ts");
+	savedState._i = ComputeSavedRecordIntegrity(savedState, "completion", achievementID, "ts");
 	return savedState._i;
 end
 
@@ -468,7 +489,11 @@ local function ValidateSavedCompletion(achievementID, savedState, savedCompletio
 	local timestamp = NormalizeCompletionTimestamp(savedState.ts);
 	if timestamp then
 		savedState.ts = timestamp;
-		if savedState._i == ComputeSavedRecordIntegrity(savedState, "completion", achievementID, IsAccountWideAchievement(achievementID), "ts") then
+		local accountWide = IsAccountWideAchievement(achievementID);
+		if savedState._i == ComputeSavedRecordIntegrity(savedState, "completion", achievementID, "ts")
+			or savedState._i == ComputeLegacySavedRecordIntegrity(savedState, "completion", achievementID, accountWide, "ts") then
+			-- Re-seal legacy/owner-based records with the new stable format.
+			savedState._i = ComputeSavedRecordIntegrity(savedState, "completion", achievementID, "ts");
 			return savedState;
 		end
 	end

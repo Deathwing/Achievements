@@ -4598,6 +4598,26 @@ function Resolvers.RecentCriteriaCast(kind, window)
 	return lastCastAt and (Resolvers.GetNow() - lastCastAt) <= (window or 20);
 end
 
+-- Record a GET_LOOT_BY_ACQUISITION criterion (fish caught / disenchant) exactly
+-- once per cast. The same catch fires both LOOT_OPENED and CHAT_MSG_LOOT and may
+-- contain multiple items; without this guard the saved counter would be inflated
+-- by the number of items times the number of events, which is what caused fish
+-- counts to run far ahead of reality.
+function Resolvers.RecordLootByAcquisitionOnce(kind, assetID, lootContexts)
+	Private.state = Private.state or {};
+	local castKey = kind == "disenchant" and "lastDisenchantCastAt" or "lastFishingCastAt";
+	local castAt = Private.state[castKey];
+	local recordedKey = kind == "disenchant" and "lastDisenchantAcquisitionAt" or "lastFishingAcquisitionAt";
+	if castAt and Private.state[recordedKey] == castAt then
+		-- This catch was already counted (other event or extra item line).
+		return false;
+	end
+	Private.state[recordedKey] = castAt;
+
+	local ctx = (lootContexts and lootContexts[1]) or {};
+	return Resolvers.RecordCriteriaProgress(CRITERIA_TYPE.GET_LOOT_BY_ACQUISITION, assetID, 1, ctx, "loot-" .. kind .. "-" .. tostring(castAt or "0"));
+end
+
 function Resolvers.BuildChatFormatPattern(formatText, rolesByArgument)
 	if type(formatText) ~= "string" or formatText == "" then
 		return nil;
@@ -4798,30 +4818,29 @@ function Resolvers.RecordLootAcquisitionCriteria(message)
 		end
 	end
 
+	-- "Loot by acquisition" criteria (fish caught / items disenchanted) must
+	-- count once per catch, not once per looted item. A single fishing catch
+	-- can yield several items and also fires BOTH LOOT_OPENED and CHAT_MSG_LOOT
+	-- for the same cast, so we dedupe on the cast timestamp to avoid inflating
+	-- the counter by 2-4x.
 	if Resolvers.RecentCriteriaCast("fishing", 30) then
-		if #lootContexts > 0 then
-			for index, ctx in ipairs(lootContexts) do
-				recorded = Resolvers.RecordCriteriaProgress(CRITERIA_TYPE.GET_LOOT_BY_ACQUISITION, 3, 1, ctx, "loot-fishing-" .. tostring(ctx.itemLink or "") .. ":" .. tostring(index)) or recorded;
-			end
-		else
-			recorded = Resolvers.RecordCriteriaProgress(CRITERIA_TYPE.GET_LOOT_BY_ACQUISITION, 3, 1, {}, "loot-fishing") or recorded;
-		end
+		recorded = Resolvers.RecordLootByAcquisitionOnce("fishing", 3, lootContexts) or recorded;
 	elseif Resolvers.RecentCriteriaCast("disenchant", 10) then
-		if #lootContexts > 0 then
-			for index, ctx in ipairs(lootContexts) do
-				recorded = Resolvers.RecordCriteriaProgress(CRITERIA_TYPE.GET_LOOT_BY_ACQUISITION, 4, 1, ctx, "loot-disenchant-" .. tostring(ctx.itemLink or "") .. ":" .. tostring(index)) or recorded;
-			end
-		else
-			recorded = Resolvers.RecordCriteriaProgress(CRITERIA_TYPE.GET_LOOT_BY_ACQUISITION, 4, 1, {}, "loot-disenchant") or recorded;
-		end
+		recorded = Resolvers.RecordLootByAcquisitionOnce("disenchant", 4, lootContexts) or recorded;
 	end
 
+	-- A single looted object (e.g. a fishing pool) can expose several loot
+	-- slots; count each distinct source object only once per loot window so the
+	-- "use object" / "catch fish in pool" counters track catches, not items.
+	local seenObjectIDs = {};
+	local fishingActive = Resolvers.RecentCriteriaCast("fishing", 30);
 	for slot = 1, GetNumLootItems() do
 		local sourceGUID = GetLootSourceInfo(slot);
 		local objectID = Resolvers.GetGameObjectIDFromGUID(sourceGUID);
-		if objectID then
+		if objectID and not seenObjectIDs[objectID] then
+			seenObjectIDs[objectID] = true;
 			recorded = Resolvers.RecordCriteriaProgress(CRITERIA_TYPE.USE_GAME_OBJECT, objectID, 1, { objectID = objectID }, "loot-object-" .. tostring(objectID)) or recorded;
-			if Resolvers.RecentCriteriaCast("fishing", 30) then
+			if fishingActive then
 				recorded = Resolvers.RecordCriteriaProgress(CRITERIA_TYPE.CATCH_FISH_IN_POOL, objectID, 1, { objectID = objectID }, "fish-pool-" .. tostring(objectID)) or recorded;
 			end
 		end
