@@ -974,27 +974,66 @@ local function ExploredTextureMatchesOverlay(exploredTexture, overlay)
 		and hitRect.right == overlay.hitRectRight;
 end
 
-local function BuildExploredWorldMapOverlayCache()
-	local overlaysByArtID = GetWorldMapOverlaysByArtID();
-	local exploredOverlays = {};
-	for uiMapID in pairs(uiMaps) do
-		local uiMapArtID = C_Map.GetMapArtID(uiMapID);
-		local overlays = uiMapArtID and overlaysByArtID[uiMapArtID] or nil;
-		if overlays then
-			local exploredTextures = C_MapExplorationInfo.GetExploredMapTextures(uiMapID);
-			if exploredTextures then
-				for _, exploredTexture in ipairs(exploredTextures) do
-					for _, overlay in ipairs(overlays) do
-						if not exploredOverlays[overlay.id] and ExploredTextureMatchesOverlay(exploredTexture, overlay) then
-							exploredOverlays[overlay.id] = true;
-						end
-					end
-				end
+-- Merge the explored overlays for a single uiMapID into `exploredOverlays`.
+-- World-map overlays are revealed permanently, so this only ever needs to set
+-- bits to true. Returns true when at least one new overlay was discovered.
+-- Attached to Resolvers (instead of a chunk-level local) to stay under Lua
+-- 5.1's 200 active local/upvalue limit in this large file.
+function Resolvers.MergeExploredOverlaysForMap(exploredOverlays, uiMapID, overlaysByArtID)
+	local uiMapArtID = C_Map.GetMapArtID(uiMapID);
+	local overlays = uiMapArtID and overlaysByArtID[uiMapArtID] or nil;
+	if not overlays then
+		return false;
+	end
+
+	local exploredTextures = C_MapExplorationInfo.GetExploredMapTextures(uiMapID);
+	if not exploredTextures then
+		return false;
+	end
+
+	local discovered = false;
+	for _, exploredTexture in ipairs(exploredTextures) do
+		for _, overlay in ipairs(overlays) do
+			if not exploredOverlays[overlay.id] and ExploredTextureMatchesOverlay(exploredTexture, overlay) then
+				exploredOverlays[overlay.id] = true;
+				discovered = true;
 			end
 		end
 	end
 
+	return discovered;
+end
+
+local function BuildExploredWorldMapOverlayCache()
+	local overlaysByArtID = GetWorldMapOverlaysByArtID();
+	local exploredOverlays = {};
+	for uiMapID in pairs(uiMaps) do
+		Resolvers.MergeExploredOverlaysForMap(exploredOverlays, uiMapID, overlaysByArtID);
+	end
+
 	return exploredOverlays;
+end
+
+-- Incremental update used on MAP_EXPLORATION_UPDATED. Instead of throwing away
+-- the whole cache and re-scanning every uiMap in the game (an expensive sweep of
+-- C_Map.GetMapArtID / C_MapExplorationInfo.GetExploredMapTextures that caused
+-- subzone-change stutter), only re-scan the player's current map and merge any
+-- newly revealed overlays. Returns true when a new overlay was discovered, so
+-- callers can skip a criteria refresh when nothing actually changed.
+function Resolvers.UpdateExploredWorldMapOverlaysForCurrentMap()
+	-- If the full cache was never built yet, leave it for the next
+	-- IsWorldMapOverlayExplored() to populate fully and report no change.
+	if not exploredWorldMapOverlayCache then
+		return false;
+	end
+
+	local uiMapID = C_Map and C_Map.GetBestMapForUnit and C_Map.GetBestMapForUnit("player");
+	if not uiMapID then
+		return false;
+	end
+
+	local overlaysByArtID = GetWorldMapOverlaysByArtID();
+	return Resolvers.MergeExploredOverlaysForMap(exploredWorldMapOverlayCache, uiMapID, overlaysByArtID);
 end
 
 local function IsWorldMapOverlayExplored(overlayID)
@@ -3018,6 +3057,30 @@ function Resolvers.FinalizeWorldStateScanCache(mapID, expressions, values)
 			expressions[5718] = true;
 		end
 	end
+end
+
+-- Cheap check for whether the player is somewhere world-state/area-POI criteria
+-- could actually apply (battlegrounds, arenas, or a zone that exposes a
+-- world-state UI). Used to skip the relatively expensive area-POI sweep and a
+-- full criteria refresh on high-frequency open-world events like
+-- AREA_POIS_UPDATED, which fire on ordinary subzone changes and were a source of
+-- leveling-zone stutter. Attached to Resolvers to stay under Lua 5.1's local
+-- limit in this file.
+function Resolvers.HasActiveWorldStateContext()
+	local ok, _, instanceType = pcall(GetInstanceInfo);
+	if ok and (instanceType == "pvp" or instanceType == "arena") then
+		return true;
+	end
+	if type(GetNumWorldStateUI) == "function" then
+		local count = GetNumWorldStateUI();
+		if count and count > 0 then
+			return true;
+		end
+	end
+	if Resolvers.GetActiveBattlefieldMapID and Resolvers.GetActiveBattlefieldMapID() then
+		return true;
+	end
+	return false;
 end
 
 function Resolvers.RecordWorldStateScan()
@@ -8121,10 +8184,12 @@ Achievements.RecordEmoteCriteria = RecordEmoteCriteria;
 Achievements.hookEmoteCriteria = HookEmoteCriteria;
 Achievements.RecordEquippedItemSlot = Resolvers.RecordEquippedItemSlot;
 Achievements.RecordWorldStateScan = Resolvers.RecordWorldStateScan;
+Achievements.HasActiveWorldStateContext = Resolvers.HasActiveWorldStateContext;
 Achievements.RecordBattlegroundWorldStateMessage = Resolvers.RecordBattlegroundWorldStateMessage;
 Achievements.RecordLFGState = Resolvers.RecordLFGState;
 Achievements.ClearQuestCompletionCache = ClearCompletedQuestLookup;
 Achievements.ClearExplorationCache = ClearExploredWorldMapOverlayCache;
+Achievements.UpdateExplorationForCurrentMap = Resolvers.UpdateExploredWorldMapOverlaysForCurrentMap;
 Achievements.ClearCharacterScanCache = ClearCharacterScanCache;
 Achievements.CountCompletedQuestsInArea = CountCompletedQuestsInArea;
 Achievements.CountCompletedQuestsInSort = CountCompletedQuestsInSort;

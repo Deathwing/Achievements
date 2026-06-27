@@ -3,7 +3,7 @@
 ## Notes: Blizzard Achievement UI compatibility layer for Classic Era and The Burning Crusade.
 ## IconTexture: Interface\AddOns\Achievements\Media\logo.png
 ## Author: Deathwing
-## Version: 1.0.4
+## Version: 1.0.5
 ## X-License: GNU GPL3
 ## X-Category: Achievements
 # ACHIEVEMENTS_UNCOMMENT_NEXT_LINE

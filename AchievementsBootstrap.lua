@@ -234,7 +234,21 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1, arg2, arg3, arg4, arg5)
 		return;
 	end
 
-	if event == "UPDATE_WORLD_STATES" or event == "UPDATE_UI_WIDGET" or event == "UPDATE_ALL_UI_WIDGETS" or event == "AREA_POIS_UPDATED" or event == "UPDATE_BATTLEFIELD_SCORE" or event == "BATTLEGROUND_POINTS_UPDATE" or event == "PVP_WORLDSTATE_UPDATE" then
+	if event == "AREA_POIS_UPDATED" then
+		-- AREA_POIS_UPDATED fires on ordinary open-world subzone changes, where
+		-- area-POI/world-state criteria can never apply. Skip the area-POI sweep
+		-- and full refresh unless we're actually in a world-state context
+		-- (battleground/arena or a zone exposing a world-state UI).
+		if not Achievements.HasActiveWorldStateContext or Achievements.HasActiveWorldStateContext() then
+			if Achievements.RecordWorldStateScan then
+				Achievements.RecordWorldStateScan();
+			end
+			Achievements.RefreshCriteriaAchievements(false);
+		end
+		return;
+	end
+
+	if event == "UPDATE_WORLD_STATES" or event == "UPDATE_UI_WIDGET" or event == "UPDATE_ALL_UI_WIDGETS" or event == "UPDATE_BATTLEFIELD_SCORE" or event == "BATTLEGROUND_POINTS_UPDATE" or event == "PVP_WORLDSTATE_UPDATE" then
 		if Achievements.RecordWorldStateScan then
 			Achievements.RecordWorldStateScan();
 		end
@@ -305,6 +319,26 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1, arg2, arg3, arg4, arg5)
 		return;
 	end
 
+	if event == "MAP_EXPLORATION_UPDATED" then
+		-- Subzone changes fire this frequently. Incrementally merge only the
+		-- current map's newly revealed overlays instead of dropping and
+		-- rebuilding the whole all-maps exploration cache, and only schedule a
+		-- scoped refresh of exploration criteria when something actually
+		-- changed. Falling back to the full path keeps correctness on clients
+		-- without the incremental helper.
+		if Achievements.UpdateExplorationForCurrentMap then
+			if Achievements.UpdateExplorationForCurrentMap() then
+				ScheduleCriteriaTypeRefresh({ CRITERIA_TYPES.REVEAL_WORLD_MAP_OVERLAY }, true, 0.35, event);
+			end
+			return;
+		end
+		if Achievements.ClearExplorationCache then
+			Achievements.ClearExplorationCache();
+		end
+		ScheduleCriteriaTypeRefresh({ CRITERIA_TYPES.REVEAL_WORLD_MAP_OVERLAY }, true, 0.35, event);
+		return;
+	end
+
 	if Achievements.ClearQuestCompletionCache then
 		Achievements.ClearQuestCompletionCache();
 	end
@@ -356,8 +390,6 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1, arg2, arg3, arg4, arg5)
 			Achievements.RecordDailyQuestResetCheck();
 		end
 		Achievements.RefreshCriteriaAchievements(false);
-	elseif event == "MAP_EXPLORATION_UPDATED" then
-		Achievements.RefreshCriteriaAchievements(true);
 	elseif event == "SPELLS_CHANGED" or event == "LEARNED_SPELL_IN_TAB" then
 		if Achievements.RecordDualTalentSpecializationCriteria then
 			Achievements.RecordDualTalentSpecializationCriteria();

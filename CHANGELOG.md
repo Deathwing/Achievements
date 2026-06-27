@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.5 - 2026-06-26
+
+- Fixed a small FPS stutter when changing subzones. Two open-world events that fire on subzone transitions each triggered a full all-achievement scan:
+  - Revealing new map areas (`MAP_EXPLORATION_UPDATED`) previously discarded and rebuilt the entire all-maps exploration cache; the addon now incrementally merges only the current map's newly revealed overlays and refreshes only exploration criteria, and only when something actually changed.
+  - Area POI updates (`AREA_POIS_UPDATED`) ran a battleground/world-state area-POI sweep and a full refresh in every zone; this work now only runs when the player is actually in a world-state context (battleground/arena or a zone exposing a world-state UI), so ordinary leveling-zone subzone changes do no extra work.
+
 ## 1.0.4 - 2026-06-20
 
 - Fixed loot-acquisition criteria (such as fish caught and items disenchanted) counting far too fast. A single catch could be counted multiple times because it was recorded once per looted item and again on both the loot window and loot chat message; these counters now increment exactly once per catch. "Catch fish in pool" and "use object" counters are likewise counted once per source object per loot.
