@@ -706,8 +706,8 @@ local function RefreshCriteriaAchievementIDs(achievementIDs, showAlerts, scope)
 	end
 
 	if Private.DispatchFrameEvent then
-		Private.DispatchFrameEvent(rawget(_G, "AchievementFrameAchievements"), "CRITERIA_UPDATE");
-		Private.DispatchFrameEvent(rawget(_G, "AchievementFrameStats"), "CRITERIA_UPDATE");
+		Private.DispatchFrameEvent(rawget(_G, "AchievementsFrameAchievements"), "CRITERIA_UPDATE");
+		Private.DispatchFrameEvent(rawget(_G, "AchievementsFrameStats"), "CRITERIA_UPDATE");
 	end
 	if Achievements.WatchFrame_Update then
 		Achievements.WatchFrame_Update();

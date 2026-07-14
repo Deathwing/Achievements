@@ -15,7 +15,6 @@ local LEGACY_MAIN_MENU_BAR_ART_HEIGHT = 43;
 local LEGACY_MAIN_MENU_BAR_XP_HEIGHT = 13;
 local LEGACY_MAIN_MENU_BAR_MAX_LEVEL_HEIGHT = 7;
 
-local nativeAchievementUILoaded;
 local nativeAchievementUILoadReason;
 local achievementMicroButtonInserted;
 local microMenuButtonInfoHooked;
@@ -418,19 +417,19 @@ local function PatchComparisonButtonShields(button)
 end
 
 local function PatchVisibleComparisonShields()
-	if AchievementFrameComparisonContainer and AchievementFrameComparisonContainer.buttons then
-		for _, button in ipairs(AchievementFrameComparisonContainer.buttons) do
+	if AchievementsFrameComparisonContainer and AchievementsFrameComparisonContainer.buttons then
+		for _, button in ipairs(AchievementsFrameComparisonContainer.buttons) do
 			PatchComparisonButtonShields(button);
 		end
 	end
 end
 
 local function PatchComparisonShieldDisplayFunction()
-	if not AchievementFrameComparison_DisplayAchievement or achievementComparisonShieldDisplayPatched then
+	if not AchievementsFrameComparison_DisplayAchievement or achievementComparisonShieldDisplayPatched then
 		return;
 	end
-	local originalDisplayAchievement = AchievementFrameComparison_DisplayAchievement;
-	AchievementFrameComparison_DisplayAchievement = function(button, ...)
+	local originalDisplayAchievement = AchievementsFrameComparison_DisplayAchievement;
+	AchievementsFrameComparison_DisplayAchievement = function(button, ...)
 		originalDisplayAchievement(button, ...);
 		PatchComparisonButtonShields(button);
 	end;
@@ -496,8 +495,8 @@ local function ApplyAchievementShieldTexturePatch()
 		achievementShieldOnLoadPatched = true;
 	end
 
-	if AchievementFrameAchievements and AchievementFrameAchievements.buttons then
-		for _, button in ipairs(AchievementFrameAchievements.buttons) do
+	if AchievementsFrameAchievements and AchievementsFrameAchievements.buttons then
+		for _, button in ipairs(AchievementsFrameAchievements.buttons) do
 			if button.shield then
 				PatchAchievementShieldInstance(button.shield, button.completed == true);
 			end
@@ -540,8 +539,8 @@ local function ApplyAchievementPlusMinusTexturePatch()
 	end
 
 	AchievementButton_UpdatePlusMinusTexture = PatchedAchievementButton_UpdatePlusMinusTexture;
-	if AchievementFrameAchievements and AchievementFrameAchievements.buttons then
-		for _, button in ipairs(AchievementFrameAchievements.buttons) do
+	if AchievementsFrameAchievements and AchievementsFrameAchievements.buttons then
+		for _, button in ipairs(AchievementsFrameAchievements.buttons) do
 			if button.plusMinus then
 				AchievementButton_UpdatePlusMinusTexture(button);
 			end
@@ -609,20 +608,20 @@ local function PatchedAchievementFrameCategories_GetCategoryList(categories)
 end
 
 local function ApplyAchievementCategoryListPatch()
-	if not AchievementFrameCategories_GetCategoryList then
+	if not AchievementsFrameCategories_GetCategoryList then
 		return;
 	end
 
-	AchievementFrameCategories_GetCategoryList = PatchedAchievementFrameCategories_GetCategoryList;
+	AchievementsFrameCategories_GetCategoryList = PatchedAchievementFrameCategories_GetCategoryList;
 
 	if ACHIEVEMENTUI_CATEGORIES and achievementFunctions and achievementFunctions.categoryAccessor then
-		AchievementFrameCategories_GetCategoryList(ACHIEVEMENTUI_CATEGORIES);
+		AchievementsFrameCategories_GetCategoryList(ACHIEVEMENTUI_CATEGORIES);
 		InvalidateAchievementStatsUICache();
-		if AchievementFrameCategories_Update and AchievementFrameCategoriesContainer and AchievementFrameCategoriesContainer.buttons then
-			AchievementFrameCategories_Update();
+		if AchievementsFrameCategories_Update and AchievementsFrameCategoriesContainer and AchievementsFrameCategoriesContainer.buttons then
+			AchievementsFrameCategories_Update();
 		end
-		if AchievementFrameStats and AchievementFrameStats:IsShown() and AchievementFrameStats_Update and AchievementFrameStatsContainer and AchievementFrameStatsContainer.buttons then
-			AchievementFrameStats_Update();
+		if AchievementsFrameStats and AchievementsFrameStats:IsShown() and AchievementsFrameStats_Update and AchievementsFrameStatsContainer and AchievementsFrameStatsContainer.buttons then
+			AchievementsFrameStats_Update();
 		end
 	end
 end
@@ -712,7 +711,7 @@ local function DisplayCachedStatistic(button, row, colorIndex)
 end
 
 local function PatchedAchievementFrameStats_Update()
-	if not achievementFunctions or not AchievementFrameStatsContainer or not AchievementFrameStatsContainer.buttons then
+	if not achievementFunctions or not AchievementsFrameStatsContainer or not AchievementsFrameStatsContainer.buttons then
 		return;
 	end
 
@@ -726,7 +725,7 @@ local function PatchedAchievementFrameStats_Update()
 		rows = BuildCachedStatsRows(category);
 	end
 
-	local scrollFrame = AchievementFrameStatsContainer;
+	local scrollFrame = AchievementsFrameStatsContainer;
 	local offset = HybridScrollFrame_GetOffset(scrollFrame);
 	local buttons = scrollFrame.buttons;
 	local numButtons = #buttons;
@@ -741,7 +740,7 @@ local function PatchedAchievementFrameStats_Update()
 		local row = rows[rowIndex];
 		if row then
 			if row.header then
-				AchievementFrameStats_SetHeader(button, row.id);
+				AchievementsFrameStats_SetHeader(button, row.id);
 			else
 				DisplayCachedStatistic(button, row, rowIndex);
 			end
@@ -755,18 +754,18 @@ local function PatchedAchievementFrameStats_Update()
 end
 
 local function ApplyAchievementStatsUIPatch()
-	if not AchievementFrameStats_Update or not AchievementFrameStats_SetHeader then
+	if not AchievementsFrameStats_Update or not AchievementsFrameStats_SetHeader then
 		return;
 	end
 
-	AchievementFrameStats_Update = PatchedAchievementFrameStats_Update;
-	if AchievementFrameStatsContainer then
-		AchievementFrameStatsContainer.update = PatchedAchievementFrameStats_Update;
+	AchievementsFrameStats_Update = PatchedAchievementFrameStats_Update;
+	if AchievementsFrameStatsContainer then
+		AchievementsFrameStatsContainer.update = PatchedAchievementFrameStats_Update;
 	end
 
-	if not achievementStatsUIPatched and AchievementFrameStats_OnEvent then
-		originalAchievementFrameStatsOnEvent = AchievementFrameStats_OnEvent;
-		AchievementFrameStats_OnEvent = function(self, event, ...)
+	if not achievementStatsUIPatched and AchievementsFrameStats_OnEvent then
+		originalAchievementFrameStatsOnEvent = AchievementsFrameStats_OnEvent;
+		AchievementsFrameStats_OnEvent = function(self, event, ...)
 			if event == "CRITERIA_UPDATE" then
 				InvalidateAchievementStatsUICache();
 			end
@@ -867,7 +866,7 @@ local function DisplayCachedComparisonStatistic(button, row, colorIndex)
 end
 
 local function PatchedAchievementFrameComparison_UpdateStats()
-	if not achievementFunctions or not AchievementFrameComparisonStatsContainer or not AchievementFrameComparisonStatsContainer.buttons then
+	if not achievementFunctions or not AchievementsFrameComparisonStatsContainer or not AchievementsFrameComparisonStatsContainer.buttons then
 		return;
 	end
 
@@ -882,7 +881,7 @@ local function PatchedAchievementFrameComparison_UpdateStats()
 		rows = BuildComparisonStatsRows(category);
 	end
 
-	local scrollFrame = AchievementFrameComparisonStatsContainer;
+	local scrollFrame = AchievementsFrameComparisonStatsContainer;
 	local offset = HybridScrollFrame_GetOffset(scrollFrame);
 	local buttons = scrollFrame.buttons;
 	local numButtons = #buttons;
@@ -897,7 +896,7 @@ local function PatchedAchievementFrameComparison_UpdateStats()
 		local row = rows[rowIndex];
 		if row then
 			if row.header then
-				AchievementFrameComparisonStats_SetHeader(button, row.id);
+				AchievementsFrameComparisonStats_SetHeader(button, row.id);
 			else
 				DisplayCachedComparisonStatistic(button, row, rowIndex);
 			end
@@ -923,29 +922,29 @@ local function GetSelectedComparisonAchievementCategory()
 end
 
 local function RefreshComparisonAchievementStatusBars()
-	if type(AchievementFrameComparison_UpdateStatusBars) ~= "function" then
+	if type(AchievementsFrameComparison_UpdateStatusBars) ~= "function" then
 		return;
 	end
 
 	local category = GetSelectedComparisonAchievementCategory();
 	if category then
-		AchievementFrameComparison_UpdateStatusBars(category);
+		AchievementsFrameComparison_UpdateStatusBars(category);
 	end
 end
 
 local function ApplyAchievementComparisonUIPatch()
-	if achievementComparisonUIPatched or type(AchievementFrameComparison_UpdateStats) ~= "function" then
+	if achievementComparisonUIPatched or type(AchievementsFrameComparison_UpdateStats) ~= "function" then
 		return;
 	end
 
-	AchievementFrameComparison_UpdateStats = PatchedAchievementFrameComparison_UpdateStats;
-	if AchievementFrameComparisonStatsContainer then
-		AchievementFrameComparisonStatsContainer.update = PatchedAchievementFrameComparison_UpdateStats;
+	AchievementsFrameComparison_UpdateStats = PatchedAchievementFrameComparison_UpdateStats;
+	if AchievementsFrameComparisonStatsContainer then
+		AchievementsFrameComparisonStatsContainer.update = PatchedAchievementFrameComparison_UpdateStats;
 	end
 
-	if type(AchievementFrameComparison_ForceUpdate) == "function" then
-		local originalAchievementFrameComparisonForceUpdate = AchievementFrameComparison_ForceUpdate;
-		AchievementFrameComparison_ForceUpdate = function(...)
+	if type(AchievementsFrameComparison_ForceUpdate) == "function" then
+		local originalAchievementFrameComparisonForceUpdate = AchievementsFrameComparison_ForceUpdate;
+		AchievementsFrameComparison_ForceUpdate = function(...)
 			RefreshComparisonAchievementStatusBars();
 			return originalAchievementFrameComparisonForceUpdate(...);
 		end;
@@ -955,36 +954,36 @@ local function ApplyAchievementComparisonUIPatch()
 end
 
 local function MarkAchievementCriteriaUIDirty()
-	if AchievementFrameAchievements then
-		AchievementFrameAchievements.criteriaDirty = true;
+	if AchievementsFrameAchievements then
+		AchievementsFrameAchievements.criteriaDirty = true;
 	end
-	if AchievementFrameAchievementsObjectives then
-		AchievementFrameAchievementsObjectives.id = nil;
+	if AchievementsFrameAchievementsObjectives then
+		AchievementsFrameAchievementsObjectives.id = nil;
 	end
 end
 
 local function RefreshAchievementCriteriaUIIfDirty()
-	if AchievementFrameAchievements and AchievementFrameAchievements.criteriaDirty then
-		AchievementFrameAchievements.criteriaDirty = nil;
-		if AchievementFrameAchievements_ForceUpdate then
-			AchievementFrameAchievements_ForceUpdate();
+	if AchievementsFrameAchievements and AchievementsFrameAchievements.criteriaDirty then
+		AchievementsFrameAchievements.criteriaDirty = nil;
+		if AchievementsFrameAchievements_ForceUpdate then
+			AchievementsFrameAchievements_ForceUpdate();
 		end
 	end
 end
 
 local function ApplyAchievementCriteriaRefreshUIPatch()
-	if achievementCriteriaRefreshUIPatched or not AchievementFrameAchievements_OnShow or not AchievementFrameAchievements_OnEvent then
+	if achievementCriteriaRefreshUIPatched or not AchievementsFrameAchievements_OnShow or not AchievementsFrameAchievements_OnEvent then
 		return;
 	end
 
-	local originalAchievementsOnShow = AchievementFrameAchievements_OnShow;
-	AchievementFrameAchievements_OnShow = function(...)
+	local originalAchievementsOnShow = AchievementsFrameAchievements_OnShow;
+	AchievementsFrameAchievements_OnShow = function(...)
 		originalAchievementsOnShow(...);
 		RefreshAchievementCriteriaUIIfDirty();
 	end;
 
-	local originalAchievementsOnEvent = AchievementFrameAchievements_OnEvent;
-	AchievementFrameAchievements_OnEvent = function(self, event, ...)
+	local originalAchievementsOnEvent = AchievementsFrameAchievements_OnEvent;
+	AchievementsFrameAchievements_OnEvent = function(self, event, ...)
 		originalAchievementsOnEvent(self, event, ...);
 		if (event == "CRITERIA_UPDATE" or event == "ACHIEVEMENT_EARNED") and self and self.IsVisible and not self:IsVisible() then
 			MarkAchievementCriteriaUIDirty();
@@ -1046,7 +1045,7 @@ end
 
 local function PatchedAchievementFrameSummary_UpdateAchievements(...)
 	local numAchievements = select("#", ...);
-	local buttons = AchievementFrameSummaryAchievements.buttons;
+	local buttons = AchievementsFrameSummaryAchievements.buttons;
 	local button, anchorTo, achievementID;
 	local defaultAchievementCount = 1;
 
@@ -1055,19 +1054,19 @@ local function PatchedAchievementFrameSummary_UpdateAchievements(...)
 			button = buttons[i];
 		end
 		if ( not button ) then
-			button = CreateFrame("Button", "AchievementFrameSummaryAchievement"..i, AchievementFrameSummaryAchievements, "SummaryAchievementTemplate");
+			button = CreateFrame("Button", "AchievementsFrameSummaryAchievement"..i, AchievementsFrameSummaryAchievements, "SummaryAchievementTemplate");
 			if ( i == 1 ) then
-				button:SetPoint("TOPLEFT",AchievementFrameSummaryAchievementsHeader, "BOTTOMLEFT", 18, 2 );
-				button:SetPoint("TOPRIGHT",AchievementFrameSummaryAchievementsHeader, "BOTTOMRIGHT", -18, 2 );
+				button:SetPoint("TOPLEFT",AchievementsFrameSummaryAchievementsHeader, "BOTTOMLEFT", 18, 2 );
+				button:SetPoint("TOPRIGHT",AchievementsFrameSummaryAchievementsHeader, "BOTTOMRIGHT", -18, 2 );
 			else
-				anchorTo = _G["AchievementFrameSummaryAchievement"..i-1];
+				anchorTo = _G["AchievementsFrameSummaryAchievement"..i-1];
 				button:SetPoint("TOPLEFT",anchorTo, "BOTTOMLEFT", 0, 3 );
 				button:SetPoint("TOPRIGHT",anchorTo, "BOTTOMRIGHT", 0, 3 );
 			end
 			if ( not buttons ) then
-				buttons = AchievementFrameSummaryAchievements.buttons;
+				buttons = AchievementsFrameSummaryAchievements.buttons;
 			end
-			AchievementFrameSummary_LocalizeButton(button);
+			AchievementsFrameSummary_LocalizeButton(button);
 		end;
 
 		if ( i <= numAchievements ) then
@@ -1096,29 +1095,28 @@ local function PatchedAchievementFrameSummary_UpdateAchievements(...)
 end
 
 local function PatchedAchievementFrameSummary_Update(isCompare)
-	AchievementFrameSummaryCategoriesStatusBar_Update();
+	AchievementsFrameSummaryCategoriesStatusBar_Update();
 	if Achievements.GetSuggestedAchievements then
 		ACHIEVEMENTUI_DEFAULTSUMMARYACHIEVEMENTS = Achievements.GetSuggestedAchievements();
 	end
-	AchievementFrameSummary_UpdateAchievements(GetLatestCompletedAchievements());
+	AchievementsFrameSummary_UpdateAchievements(GetLatestCompletedAchievements());
 end
 
 local function ApplyAchievementSummaryUIPatch()
 	ApplyAchievementCriteriaRefreshUIPatch();
 	ApplyAchievementSummaryStatisticSelectionPatch();
 
-	if not AchievementFrameSummary_Update or not AchievementFrameSummary_UpdateAchievements or not AchievementFrameSummaryCategoriesStatusBar_Update then
+	if not AchievementsFrameSummary_Update or not AchievementsFrameSummary_UpdateAchievements or not AchievementsFrameSummaryCategoriesStatusBar_Update then
 		return;
 	end
 
-	AchievementFrameSummary_Update = PatchedAchievementFrameSummary_Update;
-	AchievementFrameSummary_UpdateAchievements = PatchedAchievementFrameSummary_UpdateAchievements;
+	AchievementsFrameSummary_Update = PatchedAchievementFrameSummary_Update;
+	AchievementsFrameSummary_UpdateAchievements = PatchedAchievementFrameSummary_UpdateAchievements;
 	achievementSummaryUIPatched = true;
 end
 
 local function LoadNativeAchievementUI()
 	if IsInCombatLockdown() and not AchievementFrame_ToggleAchievementFrame then
-		nativeAchievementUILoaded = false;
 		nativeAchievementUILoadReason = "IN_COMBAT_LOCKDOWN";
 		return false, nativeAchievementUILoadReason;
 	end
@@ -1132,40 +1130,15 @@ local function LoadNativeAchievementUI()
 	ApplyAchievementComparisonUIPatch();
 
 	if AchievementFrame_ToggleAchievementFrame then
-		ApplyAchievementShieldTexturePatch();
-		ApplyAchievementPlusMinusTexturePatch();
-		ApplyAchievementCategoryListPatch();
-		ApplyAchievementStatsUIPatch();
-		ApplyAchievementSummaryUIPatch();
-		ApplyAchievementComparisonUIPatch();
-		nativeAchievementUILoaded = true;
 		nativeAchievementUILoadReason = nil;
 		return true;
 	end
 
-	if C_AddOns.IsAddOnLoaded("Blizzard_AchievementUI") then
-		ApplyAchievementShieldTexturePatch();
-		ApplyAchievementPlusMinusTexturePatch();
-		ApplyAchievementCategoryListPatch();
-		ApplyAchievementStatsUIPatch();
-		ApplyAchievementSummaryUIPatch();
-		ApplyAchievementComparisonUIPatch();
-		nativeAchievementUILoaded = true;
-		nativeAchievementUILoadReason = nil;
-		return true;
-	end
-
-	local loaded, reason = C_AddOns.LoadAddOn("Blizzard_AchievementUI");
-
-	nativeAchievementUILoaded = loaded;
-	nativeAchievementUILoadReason = reason;
-	ApplyAchievementShieldTexturePatch();
-	ApplyAchievementPlusMinusTexturePatch();
-	ApplyAchievementCategoryListPatch();
-	ApplyAchievementStatsUIPatch();
-	ApplyAchievementSummaryUIPatch();
-	ApplyAchievementComparisonUIPatch();
-	return loaded, reason;
+	-- The achievement UI is bundled with this addon on every supported client;
+	-- the native Blizzard_AchievementUI addon must never be loaded (see the
+	-- ADDON_LOADED watchdog in AchievementsBootstrap.lua).
+	nativeAchievementUILoadReason = "BUNDLED_ACHIEVEMENTUI_NOT_LOADED";
+	return false, nativeAchievementUILoadReason;
 end
 
 function Achievements.AchievementFrame_LoadUI()
@@ -1196,7 +1169,7 @@ function Achievements.AchievementFrame_LoadUI()
 end
 
 function Achievements.ToggleAchievementFrame(showStats)
-	if IsInCombatLockdown() and not (AchievementFrame and AchievementFrame:IsShown()) then
+	if IsInCombatLockdown() and not (AchievementsFrame and AchievementsFrame:IsShown()) then
 		UIErrorsFrame:OnEvent("UI_ERROR_MESSAGE", 525, ERR_NOT_IN_COMBAT)
 		-- PrintMessage("Achievements: the achievement frame cannot be opened while in combat.");
 		return;
@@ -1223,7 +1196,7 @@ function Achievements.ToggleAchievementFrame(showStats)
 		ApplyAchievementSummaryUIPatch();
 		ApplyAchievementComparisonUIPatch();
 	elseif nativeAchievementUILoadReason then
-		PrintMessage("Achievements: Blizzard_AchievementUI did not load (" .. tostring(nativeAchievementUILoadReason) .. ").");
+		PrintMessage("Achievements: the achievement UI did not load (" .. tostring(nativeAchievementUILoadReason) .. ").");
 	end
 end
 
@@ -1239,7 +1212,7 @@ function Achievements.AchievementMicroButton_Update()
 
 	LayoutLegacyAchievementMicroButton(button);
 
-	if AchievementFrame and AchievementFrame:IsShown() then
+	if AchievementsFrame and AchievementsFrame:IsShown() then
 		button:SetButtonState("PUSHED", true);
 	else
 		button:SetButtonState("NORMAL");

@@ -1,34 +1,34 @@
 local ACHIEVEMENTUI_FONTHEIGHT;						-- set in AchievementButton_OnLoad
--- [[ AchievementFrame ]] --
+-- [[ AchievementsFrame ]] --
 
 function AchievementFrame_ToggleAchievementFrame(toggleStatFrame)
-	AchievementFrameComparison:Hide();
-	AchievementFrameTab_OnClick = AchievementFrameBaseTab_OnClick;
+	AchievementsFrameComparison:Hide();
+	AchievementsFrameTab_OnClick = AchievementsFrameBaseTab_OnClick;
 	if ( not toggleStatFrame ) then
-		if ( AchievementFrame:IsShown() and AchievementFrame.selectedTab == 1 ) then
-			HideUIPanel(AchievementFrame);
+		if ( AchievementsFrame:IsShown() and AchievementsFrame.selectedTab == 1 ) then
+			HideUIPanel(AchievementsFrame);
 		else
-			ShowUIPanel(AchievementFrame);
-			AchievementFrameTab_OnClick(1);
+			ShowUIPanel(AchievementsFrame);
+			AchievementsFrameTab_OnClick(1);
 		end
 		return;
 	end
-	if ( AchievementFrame:IsShown() and AchievementFrame.selectedTab == 2 ) then
-		HideUIPanel(AchievementFrame);
+	if ( AchievementsFrame:IsShown() and AchievementsFrame.selectedTab == 2 ) then
+		HideUIPanel(AchievementsFrame);
 	else
-		ShowUIPanel(AchievementFrame);
-		AchievementFrameTab_OnClick(2);
+		ShowUIPanel(AchievementsFrame);
+		AchievementsFrameTab_OnClick(2);
 	end
 end
 
 function AchievementFrame_DisplayComparison (unit)
-	AchievementFrame.wasShown = nil;
-	AchievementFrameTab_OnClick = AchievementFrameComparisonTab_OnClick;
-	AchievementFrameTab_OnClick(1);
-	ShowUIPanel(AchievementFrame);
-	--AchievementFrame_ShowSubFrame(AchievementFrameComparison, AchievementFrameSummary);
-	AchievementFrameComparison_SetUnit(unit);
-	AchievementFrameComparison_ForceUpdate();
+	AchievementsFrame.wasShown = nil;
+	AchievementsFrameTab_OnClick = AchievementsFrameComparisonTab_OnClick;
+	AchievementsFrameTab_OnClick(1);
+	ShowUIPanel(AchievementsFrame);
+	--AchievementFrame_ShowSubFrame(AchievementsFrameComparison, AchievementsFrameSummary);
+	AchievementsFrameComparison_SetUnit(unit);
+	AchievementsFrameComparison_ForceUpdate();
 end
 
 function AchievementFrame_OnLoad (self)
@@ -47,75 +47,75 @@ function AchievementFrame_OnLoad (self)
 	end
 
 	local function SetFilterSelected(filter)
-		AchievementFrameFilterDropdown:SetText(filter.text);
+		AchievementsFrameFilterDropdown:SetText(filter.text);
 		if filter.func ~= ACHIEVEMENTUI_SELECTEDFILTER then
 			ACHIEVEMENTUI_SELECTEDFILTER = filter.func;
-			AchievementFrameAchievements_ForceUpdate();
+			AchievementsFrameAchievements_ForceUpdate();
 		end
 	end
 
-	AchievementFrameFilterDropdown:SetWidth(118);
-	AchievementFrameFilterDropdown:SetFrameLevel(AchievementFrameFilterDropdown:GetFrameLevel() + 1);
-	AchievementFrameFilterDropdown:SetupMenu(function(dropdown, rootDescription)
+	AchievementsFrameFilterDropdown:SetWidth(118);
+	AchievementsFrameFilterDropdown:SetFrameLevel(AchievementsFrameFilterDropdown:GetFrameLevel() + 1);
+	AchievementsFrameFilterDropdown:SetupMenu(function(dropdown, rootDescription)
 		rootDescription:SetTag("MENU_ACHIEVEMENT_FILTER", block);
 
-		for i, filter in ipairs(AchievementFrameFilters) do
+		for i, filter in ipairs(AchievementsFrameFilters) do
 			rootDescription:CreateRadio(filter.text, IsFilterSelected, SetFilterSelected, filter);
 		end
 	end);
 
-	AchievementFrame_ShowSubFrame(AchievementFrameSummary);
+	AchievementFrame_ShowSubFrame(AchievementsFrameSummary);
 
 end
 
-function AchievementFrameBaseTab_OnClick (id)
-	PanelTemplates_Tab_OnClick(_G["AchievementFrameTab"..id], AchievementFrame);
+function AchievementsFrameBaseTab_OnClick (id)
+	PanelTemplates_Tab_OnClick(_G["AchievementsFrameTab"..id], AchievementsFrame);
 	
 	local isSummary = false
 	if ( id == 1 ) then
 		achievementFunctions = ACHIEVEMENT_FUNCTIONS;
-		AchievementFrameCategories_GetCategoryList(ACHIEVEMENTUI_CATEGORIES); -- This needs to happen before AchievementFrame_ShowSubFrame (fix for bug 157885)
+		AchievementsFrameCategories_GetCategoryList(ACHIEVEMENTUI_CATEGORIES); -- This needs to happen before AchievementFrame_ShowSubFrame (fix for bug 157885)
 		if ( achievementFunctions.selectedCategory == "summary" ) then
 			isSummary = true;
-			AchievementFrame_ShowSubFrame(AchievementFrameSummary);
+			AchievementFrame_ShowSubFrame(AchievementsFrameSummary);
 		else
-			AchievementFrame_ShowSubFrame(AchievementFrameAchievements);
+			AchievementFrame_ShowSubFrame(AchievementsFrameAchievements);
 		end
-		AchievementFrameWaterMark:SetTexture("Interface\\AchievementFrame\\UI-Achievement-AchievementWatermark");
+		AchievementsFrameWaterMark:SetTexture("Interface\\AchievementFrame\\UI-Achievement-AchievementWatermark");
 	else
 		achievementFunctions = STAT_FUNCTIONS;
-		AchievementFrameCategories_GetCategoryList(ACHIEVEMENTUI_CATEGORIES);
+		AchievementsFrameCategories_GetCategoryList(ACHIEVEMENTUI_CATEGORIES);
 		if ( achievementFunctions.selectedCategory == "summary" ) then
-			AchievementFrame_ShowSubFrame(AchievementFrameStats);
+			AchievementFrame_ShowSubFrame(AchievementsFrameStats);
 			achievementFunctions.selectedCategory = ACHIEVEMENT_COMPARISON_STATS_SUMMARY_ID;
-			AchievementFrameStatsContainerScrollBar:SetValue(0);
+			AchievementsFrameStatsContainerScrollBar:SetValue(0);
 		else
-			AchievementFrame_ShowSubFrame(AchievementFrameStats);
+			AchievementFrame_ShowSubFrame(AchievementsFrameStats);
 		end
-		AchievementFrameWaterMark:SetTexture("Interface\\AchievementFrame\\UI-Achievement-StatWatermark");
+		AchievementsFrameWaterMark:SetTexture("Interface\\AchievementFrame\\UI-Achievement-StatWatermark");
 	end
 	
-	AchievementFrameCategories_Update();
+	AchievementsFrameCategories_Update();
 	
 	if ( not isSummary ) then
 		achievementFunctions.updateFunc();
 	end
 end
 
-function AchievementFrameComparisonTab_OnClick (id)
+function AchievementsFrameComparisonTab_OnClick (id)
 	if ( id == 1 ) then
 		achievementFunctions = COMPARISON_ACHIEVEMENT_FUNCTIONS;
-		AchievementFrame_ShowSubFrame(AchievementFrameComparison, AchievementFrameComparisonContainer);
-		AchievementFrameWaterMark:SetTexture("Interface\\AchievementFrame\\UI-Achievement-AchievementWatermark");
+		AchievementFrame_ShowSubFrame(AchievementsFrameComparison, AchievementsFrameComparisonContainer);
+		AchievementsFrameWaterMark:SetTexture("Interface\\AchievementFrame\\UI-Achievement-AchievementWatermark");
 	else
 		achievementFunctions = COMPARISON_STAT_FUNCTIONS;
-		AchievementFrame_ShowSubFrame(AchievementFrameComparison, AchievementFrameComparisonStatsContainer);
-		AchievementFrameWaterMark:SetTexture("Interface\\AchievementFrame\\UI-Achievement-StatWatermark");
+		AchievementFrame_ShowSubFrame(AchievementsFrameComparison, AchievementsFrameComparisonStatsContainer);
+		AchievementsFrameWaterMark:SetTexture("Interface\\AchievementFrame\\UI-Achievement-StatWatermark");
 	end
 	
-	AchievementFrameCategories_GetCategoryList(ACHIEVEMENTUI_CATEGORIES);
-	AchievementFrameCategories_Update();
-	PanelTemplates_Tab_OnClick(_G["AchievementFrameTab"..id], AchievementFrame);
+	AchievementsFrameCategories_GetCategoryList(ACHIEVEMENTUI_CATEGORIES);
+	AchievementsFrameCategories_Update();
+	PanelTemplates_Tab_OnClick(_G["AchievementsFrameTab"..id], AchievementsFrame);
 	
 	achievementFunctions.updateFunc();
 end
@@ -138,15 +138,15 @@ function AchievementFrame_ShowSubFrame(...)
 	end
 end
 
--- [[ AchievementFrameCategories ]] --
+-- [[ AchievementsFrameCategories ]] --
 
-function AchievementFrameCategories_OnLoad (self)
+function AchievementsFrameCategories_OnLoad (self)
 	self.buttons = {};
 	self:RegisterEvent("ADDON_LOADED");
-	self:SetScript("OnEvent", AchievementFrameCategories_OnEvent);
+	self:SetScript("OnEvent", AchievementsFrameCategories_OnEvent);
 end
 
-function AchievementFrameCategories_GetCategoryList (categories)
+function AchievementsFrameCategories_GetCategoryList (categories)
 	local cats = achievementFunctions.categoryAccessor();
 	
 	for i in next, categories do
@@ -175,7 +175,7 @@ function AchievementFrameCategories_GetCategoryList (categories)
 	end
 end
 
-function AchievementFrameCategories_DisplayButton (button, element)
+function AchievementsFrameCategories_DisplayButton (button, element)
 	if ( not element ) then
 		button.element = nil;
 		button:Hide();
@@ -218,19 +218,19 @@ function AchievementFrameCategories_DisplayButton (button, element)
 	if ( id == FEAT_OF_STRENGTH_ID ) then
 		-- This is the feat of strength category since it's sorted to the end of the list
 		button.text = FEAT_OF_STRENGTH_DESCRIPTION;
-		button.showTooltipFunc = AchievementFrameCategory_FeatOfStrengthTooltip;
-	elseif ( AchievementFrame.selectedTab == 1 ) then
+		button.showTooltipFunc = AchievementsFrameCategory_FeatOfStrengthTooltip;
+	elseif ( AchievementsFrame.selectedTab == 1 ) then
 		button.text = nil;
 		button.numAchievements = numAchievements;
 		button.numCompleted = numCompleted;
 		button.numCompletedText = numCompleted.."/"..numAchievements;
-		button.showTooltipFunc = AchievementFrameCategory_StatusBarTooltip;
+		button.showTooltipFunc = AchievementsFrameCategory_StatusBarTooltip;
 	else
 		button.showTooltipFunc = nil;
 	end
 end
 
-function AchievementFrameCategories_SelectButton (button)
+function AchievementsFrameCategories_SelectButton (button)
 	local id = button.element.id;
 	
 	if ( type(button.element.parent) ~= "number" ) then
@@ -256,7 +256,7 @@ function AchievementFrameCategories_SelectButton (button)
 		end
 	end
 	
-	local buttons = AchievementFrameCategoriesContainer.buttons;
+	local buttons = AchievementsFrameCategoriesContainer.buttons;
 	for _, categoryButton in next, buttons do
 		categoryButton.isSelected = nil;
 	end
@@ -271,46 +271,46 @@ function AchievementFrameCategories_SelectButton (button)
 	--Intercept "summary" category
 	if ( id == "summary" ) then
 		if ( achievementFunctions == ACHIEVEMENT_FUNCTIONS ) then
-			AchievementFrame_ShowSubFrame(AchievementFrameSummary);
+			AchievementFrame_ShowSubFrame(AchievementsFrameSummary);
 			achievementFunctions.selectedCategory = id;
 			return;
 		elseif (  achievementFunctions == STAT_FUNCTIONS ) then
-			AchievementFrame_ShowSubFrame(AchievementFrameStats);
+			AchievementFrame_ShowSubFrame(AchievementsFrameStats);
 			achievementFunctions.selectedCategory = ACHIEVEMENT_COMPARISON_STATS_SUMMARY_ID;
-			AchievementFrameStatsContainerScrollBar:SetValue(0);
+			AchievementsFrameStatsContainerScrollBar:SetValue(0);
 		elseif ( achievementFunctions == COMPARISON_ACHIEVEMENT_FUNCTIONS ) then
 			-- Put the summary stuff for comparison here, Derek!
-			AchievementFrame_ShowSubFrame(AchievementFrameComparison, AchievementFrameComparisonContainer);
+			AchievementFrame_ShowSubFrame(AchievementsFrameComparison, AchievementsFrameComparisonContainer);
 			achievementFunctions.selectedCategory = ACHIEVEMENT_COMPARISON_SUMMARY_ID;
-			AchievementFrameComparisonContainerScrollBar:SetValue(0);
-			AchievementFrameComparison_UpdateStatusBars(ACHIEVEMENT_COMPARISON_SUMMARY_ID);
+			AchievementsFrameComparisonContainerScrollBar:SetValue(0);
+			AchievementsFrameComparison_UpdateStatusBars(ACHIEVEMENT_COMPARISON_SUMMARY_ID);
 		elseif ( achievementFunctions == COMPARISON_STAT_FUNCTIONS ) then
-			AchievementFrame_ShowSubFrame(AchievementFrameComparison, AchievementFrameComparisonStatsContainer);
+			AchievementFrame_ShowSubFrame(AchievementsFrameComparison, AchievementsFrameComparisonStatsContainer);
 			achievementFunctions.selectedCategory = ACHIEVEMENT_COMPARISON_STATS_SUMMARY_ID;
-			AchievementFrameComparisonStatsContainerScrollBar:SetValue(0);
+			AchievementsFrameComparisonStatsContainerScrollBar:SetValue(0);
 		end
 		
 	else
 		if ( achievementFunctions == STAT_FUNCTIONS ) then
-			AchievementFrame_ShowSubFrame(AchievementFrameStats);
-			AchievementFrameStatsContainerScrollBar:SetValue(0);
+			AchievementFrame_ShowSubFrame(AchievementsFrameStats);
+			AchievementsFrameStatsContainerScrollBar:SetValue(0);
 		elseif ( achievementFunctions == ACHIEVEMENT_FUNCTIONS ) then
-			AchievementFrame_ShowSubFrame(AchievementFrameAchievements);
-			AchievementFrameAchievementsContainerScrollBar:SetValue(0);
+			AchievementFrame_ShowSubFrame(AchievementsFrameAchievements);
+			AchievementsFrameAchievementsContainerScrollBar:SetValue(0);
 			if ( id == FEAT_OF_STRENGTH_ID ) then
-				AchievementFrameFilterDropdown:Hide();
-				AchievementFrameHeaderRightDDLInset:Hide();
+				AchievementsFrameFilterDropdown:Hide();
+				AchievementsFrameHeaderRightDDLInset:Hide();
 			else
-				AchievementFrameFilterDropdown:Show();
-				AchievementFrameHeaderRightDDLInset:Show();
+				AchievementsFrameFilterDropdown:Show();
+				AchievementsFrameHeaderRightDDLInset:Show();
 			end
 		elseif ( achievementFunctions == COMPARISON_ACHIEVEMENT_FUNCTIONS ) then
-			AchievementFrame_ShowSubFrame(AchievementFrameComparison, AchievementFrameComparisonContainer);
-			AchievementFrameComparisonContainerScrollBar:SetValue(0);
-			AchievementFrameComparison_UpdateStatusBars(id);
+			AchievementFrame_ShowSubFrame(AchievementsFrameComparison, AchievementsFrameComparisonContainer);
+			AchievementsFrameComparisonContainerScrollBar:SetValue(0);
+			AchievementsFrameComparison_UpdateStatusBars(id);
 		else
-			AchievementFrame_ShowSubFrame(AchievementFrameComparison, AchievementFrameComparisonStatsContainer);
-			AchievementFrameComparisonStatsContainerScrollBar:SetValue(0);
+			AchievementFrame_ShowSubFrame(AchievementsFrameComparison, AchievementsFrameComparisonStatsContainer);
+			AchievementsFrameComparisonStatsContainerScrollBar:SetValue(0);
 		end
 		achievementFunctions.selectedCategory = id;
 	end
@@ -322,17 +322,17 @@ function AchievementFrameCategories_SelectButton (button)
 	achievementFunctions.updateFunc();
 end
 
-function AchievementFrameAchievements_OnShow()
+function AchievementsFrameAchievements_OnShow()
 	if ( achievementFunctions.selectedCategory == FEAT_OF_STRENGTH_ID ) then
-		AchievementFrameFilterDropdown:Hide();
-		AchievementFrameHeaderRightDDLInset:Hide();
+		AchievementsFrameFilterDropdown:Hide();
+		AchievementsFrameHeaderRightDDLInset:Hide();
 	else
-		AchievementFrameFilterDropdown:Show();
-		AchievementFrameHeaderRightDDLInset:Show();	
+		AchievementsFrameFilterDropdown:Show();
+		AchievementsFrameHeaderRightDDLInset:Show();	
 	end
-	if ( AchievementFrameAchievements.criteriaDirty ) then
-		AchievementFrameAchievements.criteriaDirty = nil;
-		AchievementFrameAchievements_ForceUpdate();
+	if ( AchievementsFrameAchievements.criteriaDirty ) then
+		AchievementsFrameAchievements.criteriaDirty = nil;
+		AchievementsFrameAchievements_ForceUpdate();
 	end
 end
 
@@ -348,34 +348,34 @@ function AchievementCategoryButton_OnLoad (button)
 	button.background = _G[buttonName.."Background"];
 end
 
--- [[ AchievementFrameAchievements ]] --
+-- [[ AchievementsFrameAchievements ]] --
 
-function AchievementFrameAchievements_OnLoad (self)
-	AchievementFrameAchievementsContainerScrollBar.Show = 
+function AchievementsFrameAchievements_OnLoad (self)
+	AchievementsFrameAchievementsContainerScrollBar.Show = 
 		function (self)
-			AchievementFrameAchievements:SetWidth(504);
-			for _, button in next, AchievementFrameAchievements.buttons do
+			AchievementsFrameAchievements:SetWidth(504);
+			for _, button in next, AchievementsFrameAchievements.buttons do
 				button:SetWidth(496);
 			end
 			getmetatable(self).__index.Show(self);
 		end
 		
-	AchievementFrameAchievementsContainerScrollBar.Hide = 
+	AchievementsFrameAchievementsContainerScrollBar.Hide = 
 		function (self)
-			AchievementFrameAchievements:SetWidth(530);
-			for _, button in next, AchievementFrameAchievements.buttons do
+			AchievementsFrameAchievements:SetWidth(530);
+			for _, button in next, AchievementsFrameAchievements.buttons do
 				button:SetWidth(522);
 			end
 			getmetatable(self).__index.Hide(self);
 		end
 		
 	self:RegisterEvent("ADDON_LOADED");
-	AchievementFrameAchievementsContainerScrollBarBG:Show();
-	AchievementFrameAchievementsContainer.update = AchievementFrameAchievements_Update;
-	HybridScrollFrame_CreateButtons(AchievementFrameAchievementsContainer, "AchievementTemplate", 0, -2);
+	AchievementsFrameAchievementsContainerScrollBarBG:Show();
+	AchievementsFrameAchievementsContainer.update = AchievementsFrameAchievements_Update;
+	HybridScrollFrame_CreateButtons(AchievementsFrameAchievementsContainer, "AchievementTemplate", 0, -2);
 end
 
-function AchievementFrameAchievements_OnEvent (self, event, ...)
+function AchievementsFrameAchievements_OnEvent (self, event, ...)
 	if ( event == "ADDON_LOADED" ) then
 		self:RegisterEvent("ACHIEVEMENT_EARNED");
 		self:RegisterEvent("CRITERIA_UPDATE");
@@ -385,38 +385,38 @@ function AchievementFrameAchievements_OnEvent (self, event, ...)
 	elseif ( event == "ACHIEVEMENT_EARNED" ) then
 		if ( self:IsVisible()) then
 			local achievementID = ...;
-			AchievementFrameCategories_Update();
-			AchievementFrameCategories_UpdateTooltip();
-			-- This has to happen before AchievementFrameAchievements_ForceUpdate() in order to achieve the behavior we want, since it clears the selection for progressive achievements.
-			local selection = AchievementFrameAchievements.selection;
-			AchievementFrameAchievements_ForceUpdate();
-			if ( AchievementFrameAchievementsContainer:IsShown() and selection == achievementID ) then
+			AchievementsFrameCategories_Update();
+			AchievementsFrameCategories_UpdateTooltip();
+			-- This has to happen before AchievementsFrameAchievements_ForceUpdate() in order to achieve the behavior we want, since it clears the selection for progressive achievements.
+			local selection = AchievementsFrameAchievements.selection;
+			AchievementsFrameAchievements_ForceUpdate();
+			if ( AchievementsFrameAchievementsContainer:IsShown() and selection == achievementID ) then
 				AchievementFrame_SelectAchievement(selection, true);
 			end
-			AchievementFrameHeaderPoints:SetText(GetTotalAchievementPoints());
+			AchievementsFrameHeaderPoints:SetText(GetTotalAchievementPoints());
 		else
-			AchievementFrameAchievements.criteriaDirty = true;
-			AchievementFrameAchievementsObjectives.id = nil;
+			AchievementsFrameAchievements.criteriaDirty = true;
+			AchievementsFrameAchievementsObjectives.id = nil;
 		end
 
 	elseif ( event == "CRITERIA_UPDATE" ) then
 		if ( self:IsVisible() ) then
-			if ( AchievementFrameAchievements.selection) then
-				local id = AchievementFrameAchievementsObjectives.id;
-				local button = AchievementFrameAchievementsObjectives:GetParent();
-				AchievementFrameAchievementsObjectives.id = nil;
+			if ( AchievementsFrameAchievements.selection) then
+				local id = AchievementsFrameAchievementsObjectives.id;
+				local button = AchievementsFrameAchievementsObjectives:GetParent();
+				AchievementsFrameAchievementsObjectives.id = nil;
 				AchievementButton_DisplayObjectives(button, id, button.completed);
-				AchievementFrameAchievements_Update();
+				AchievementsFrameAchievements_Update();
 			else
-				AchievementFrameAchievementsObjectives.id = nil; -- Force redraw
+				AchievementsFrameAchievementsObjectives.id = nil; -- Force redraw
 			end
 		else
-			AchievementFrameAchievements.criteriaDirty = true;
-			AchievementFrameAchievementsObjectives.id = nil;
+			AchievementsFrameAchievements.criteriaDirty = true;
+			AchievementsFrameAchievementsObjectives.id = nil;
 		end
 	elseif ( event == "TRACKED_ACHIEVEMENT_LIST_CHANGED" ) then
-		for k, v in next, AchievementFrame.trackedAchievements do
-			AchievementFrame.trackedAchievements[k] = nil;
+		for k, v in next, AchievementsFrame.trackedAchievements do
+			AchievementsFrame.trackedAchievements[k] = nil;
 		end
 		
 		AchievementFrame_UpdateTrackedAchievements(GetTrackedAchievements());
@@ -428,16 +428,16 @@ function AchievementFrameAchievements_OnEvent (self, event, ...)
 	end
 end
 
-function AchievementFrameAchievementsBackdrop_OnLoad (self)
+function AchievementsFrameAchievementsBackdrop_OnLoad (self)
 	self:SetFrameLevel(self:GetFrameLevel()+1);
 end
 
-function AchievementFrameAchievements_Update ()
+function AchievementsFrameAchievements_Update ()
 	local category = achievementFunctions.selectedCategory;
 	if ( category == "summary" ) then
 		return;
 	end
-	local scrollFrame = AchievementFrameAchievementsContainer
+	local scrollFrame = AchievementsFrameAchievementsContainer
 	
 	local offset = HybridScrollFrame_GetOffset(scrollFrame);
 	local buttons = scrollFrame.buttons;
@@ -446,12 +446,12 @@ function AchievementFrameAchievements_Update ()
 	
 	-- If the current category is feats of strength and there are no entries then show the explanation text
 	if ( AchievementFrame_IsFeatOfStrength() and numAchievements == 0 ) then
-		AchievementFrameAchievementsFeatOfStrengthText:Show();
+		AchievementsFrameAchievementsFeatOfStrengthText:Show();
 	else
-		AchievementFrameAchievementsFeatOfStrengthText:Hide();
+		AchievementsFrameAchievementsFeatOfStrengthText:Hide();
 	end
 
-	local selection = AchievementFrameAchievements.selection;
+	local selection = AchievementsFrameAchievements.selection;
 	if ( selection ) then
 		AchievementButton_ResetObjectives();
 	end
@@ -476,15 +476,15 @@ function AchievementFrameAchievements_Update ()
 	HybridScrollFrame_Update(scrollFrame, totalHeight, displayedHeight);
 
 	if ( selection ) then
-		AchievementFrameAchievements.selection = selection;
+		AchievementsFrameAchievements.selection = selection;
 	else
 		HybridScrollFrame_CollapseButton(scrollFrame);
 	end
 end
 
-function AchievementFrameAchievements_ClearSelection ()
+function AchievementsFrameAchievements_ClearSelection ()
 	AchievementButton_ResetObjectives();
-	for _, button in next, AchievementFrameAchievements.buttons do
+	for _, button in next, AchievementsFrameAchievements.buttons do
 		button:Collapse();
 		if ( not button:IsMouseOver() ) then
 			button.highlight:Hide();
@@ -497,7 +497,7 @@ function AchievementFrameAchievements_ClearSelection ()
 		button.hiddenDescription:Hide();
 	end
 	
-	AchievementFrameAchievements.selection = nil;
+	AchievementsFrameAchievements.selection = nil;
 end
 
 -- [[ Achievement Icon ]] --
@@ -654,16 +654,16 @@ function AchievementButton_OnLoad (self)
 	self:Collapse();
 	self:Desaturate();
 	
-	AchievementFrameAchievements.buttons = AchievementFrameAchievements.buttons or {};
-	tinsert(AchievementFrameAchievements.buttons, self);
+	AchievementsFrameAchievements.buttons = AchievementsFrameAchievements.buttons or {};
+	tinsert(AchievementsFrameAchievements.buttons, self);
 end
 
 function AchievementButton_OnClick (self, ignoreModifiers)
 	if(IsModifiedClick() and not ignoreModifiers) then
-		if ( IsModifiedClick("CHATLINK") and ChatEdit_GetActiveWindow() ) then
+		if ( IsModifiedClick("CHATLINK") and ChatFrameUtil.GetActiveWindow() ) then
 			local achievementLink = GetAchievementLink(self.id);
 			if ( achievementLink ) then
-				ChatEdit_InsertLink(achievementLink);
+				ChatFrameUtil.InsertLink(achievementLink);
 			end
 		elseif ( IsModifiedClick("QUESTWATCHTOGGLE") ) then
 			AchievementButton_ToggleTracking(self.id);
@@ -676,25 +676,25 @@ function AchievementButton_OnClick (self, ignoreModifiers)
 		if ( not self:IsMouseOver() ) then
 			self.highlight:Hide();
 		end
-		AchievementFrameAchievements_ClearSelection()
-		HybridScrollFrame_CollapseButton(AchievementFrameAchievementsContainer);
-		AchievementFrameAchievements_Update();
+		AchievementsFrameAchievements_ClearSelection()
+		HybridScrollFrame_CollapseButton(AchievementsFrameAchievementsContainer);
+		AchievementsFrameAchievements_Update();
 		return;
 	end
-	AchievementFrameAchievements_ClearSelection()
-	AchievementFrameAchievements_SelectButton(self);
+	AchievementsFrameAchievements_ClearSelection()
+	AchievementsFrameAchievements_SelectButton(self);
 	AchievementButton_DisplayAchievement(self, achievementFunctions.selectedCategory, self.index, self.id);
-	HybridScrollFrame_ExpandButton(AchievementFrameAchievementsContainer, ((self.index - 1) * ACHIEVEMENTBUTTON_COLLAPSEDHEIGHT), self:GetHeight());
-	AchievementFrameAchievements_Update();
+	HybridScrollFrame_ExpandButton(AchievementsFrameAchievementsContainer, ((self.index - 1) * ACHIEVEMENTBUTTON_COLLAPSEDHEIGHT), self:GetHeight());
+	AchievementsFrameAchievements_Update();
 	if ( not ignoreModifiers ) then
-		AchievementFrameAchievements_AdjustSelection();
+		AchievementsFrameAchievements_AdjustSelection();
 	end
 end
 
 function AchievementButton_ToggleTracking (id)
-	if ( AchievementFrame.trackedAchievements[id] ) then
+	if ( AchievementsFrame.trackedAchievements[id] ) then
 		RemoveTrackedAchievement(id);
-		AchievementFrameAchievements_ForceUpdate();
+		AchievementsFrameAchievements_ForceUpdate();
 		WatchFrame_Update();
 		return;
 	end
@@ -713,7 +713,7 @@ function AchievementButton_ToggleTracking (id)
 	end
 	
 	AddTrackedAchievement(id);
-	AchievementFrameAchievements_ForceUpdate();
+	AchievementsFrameAchievements_ForceUpdate();
 	WatchFrame_Update();
 	
 	return true;
@@ -794,7 +794,7 @@ function AchievementButton_DisplayAchievement (button, category, achievement, se
 	end
 	
 	if ( id == selectionID ) then
-		local achievements = AchievementFrameAchievements;
+		local achievements = AchievementsFrameAchievements;
 		
 		achievements.selection = button.id;
 		achievements.selectionIndex = button.index;
@@ -822,8 +822,8 @@ function AchievementButton_DisplayAchievement (button, category, achievement, se
 	return id;
 end
 
-function AchievementFrameAchievements_SelectButton (button)
-	local achievements = AchievementFrameAchievements;
+function AchievementsFrameAchievements_SelectButton (button)
+	local achievements = AchievementsFrameAchievements;
 	
 	achievements.selection = button.id;
 	achievements.selectionIndex = button.index;
@@ -831,7 +831,7 @@ function AchievementFrameAchievements_SelectButton (button)
 end
 
 function AchievementButton_DisplayObjectives (button, id, completed)
-	local objectives = AchievementFrameAchievementsObjectives;
+	local objectives = AchievementsFrameAchievementsObjectives;
 	
 	objectives:ClearAllPoints();
 	objectives:SetParent(button);
@@ -890,16 +890,16 @@ function AchievementButton_DisplayObjectives (button, id, completed)
 end
 
 function AchievementButton_ResetCriteria ()
-	AchievementButton_ResetTable(AchievementFrame.criteriaTable);
+	AchievementButton_ResetTable(AchievementsFrame.criteriaTable);
 end
 
 function AchievementButton_GetMeta (index)
-	local metaCriteriaTable = AchievementFrame.metaCriteriaTable;
+	local metaCriteriaTable = AchievementsFrame.metaCriteriaTable;
 	if ( metaCriteriaTable[index] ) then
 		return metaCriteriaTable[index];
 	end
 	
-	local frame = CreateFrame("BUTTON", "AchievementFrameMeta" .. index, AchievementFrameAchievements, "MetaCriteriaTemplate");
+	local frame = CreateFrame("BUTTON", "AchievementsFrameMeta" .. index, AchievementsFrameAchievements, "MetaCriteriaTemplate");
 	AchievementButton_LocalizeMetaAchievement(frame);
 	metaCriteriaTable[index] = frame;
 	
@@ -935,9 +935,9 @@ function AchievementObjectives_DisplayProgressiveAchievement (objectivesFrame, i
 		if ( index == 1 ) then
 			miniAchievement:SetPoint("TOPLEFT", objectivesFrame, "TOPLEFT", -4, -4);
 		elseif ( index == 7 ) then
-			miniAchievement:SetPoint("TOPLEFT", AchievementFrame.miniTable[1], "BOTTOMLEFT", 0, -8);
+			miniAchievement:SetPoint("TOPLEFT", AchievementsFrame.miniTable[1], "BOTTOMLEFT", 0, -8);
 		else
-			miniAchievement:SetPoint("TOPLEFT", AchievementFrame.miniTable[index-1], "TOPRIGHT", 4, 0);
+			miniAchievement:SetPoint("TOPLEFT", AchievementsFrame.miniTable[index-1], "TOPRIGHT", 4, 0);
 		end
 		
 		miniAchievement.points:SetText(points);
@@ -1002,7 +1002,7 @@ function AchievementObjectives_DisplayCriteria (objectivesFrame, id)
 				numRows = numRows + 2;
 			elseif ( math.fmod(metas, 2) == 0 ) then
 				yPos = -((metas/2 - 1) * 28) - 8;
-				AchievementFrame.metaCriteriaTable[metas-1]:SetPoint("TOPLEFT", objectivesFrame, "TOPLEFT", 20, yPos);
+				AchievementsFrame.metaCriteriaTable[metas-1]:SetPoint("TOPLEFT", objectivesFrame, "TOPLEFT", 20, yPos);
 				metaCriteria:SetPoint("TOPLEFT", objectivesFrame, "TOPLEFT", 210, yPos);
 			else
 				metaCriteria:SetPoint("TOPLEFT", objectivesFrame, "TOPLEFT", 20, -(math.ceil(metas/2 - 1) * 28) - 8);
@@ -1051,7 +1051,7 @@ function AchievementObjectives_DisplayCriteria (objectivesFrame, id)
 			if ( progressBars == 1 ) then
 				progressBar:SetPoint("TOP", objectivesFrame, "TOP", 4, -4);
 			else
-				progressBar:SetPoint("TOP", AchievementFrame.progressBarTable[progressBars-1], "BOTTOM", 0, 0);
+				progressBar:SetPoint("TOP", AchievementsFrame.progressBarTable[progressBars-1], "BOTTOM", 0, 0);
 			end
 			
 			progressBar.text:SetText(string.format("%s", quantityString));
@@ -1074,7 +1074,7 @@ function AchievementObjectives_DisplayCriteria (objectivesFrame, id)
 				end
 				
 			else
-				criteria:SetPoint("TOPLEFT", AchievementFrame.criteriaTable[textStrings-1], "BOTTOMLEFT", 0, 0);
+				criteria:SetPoint("TOPLEFT", AchievementsFrame.criteriaTable[textStrings-1], "BOTTOMLEFT", 0, 0);
 			end
 			
 			if ( objectivesFrame.completed and criteriaCompleted ) then
@@ -1112,12 +1112,12 @@ function AchievementObjectives_DisplayCriteria (objectivesFrame, id)
 
 	if ( textStrings > 0 and progressBars > 0 ) then
 		-- If we have text criteria and progressBar criteria, display the progressBar criteria first and position the textStrings under them.
-		AchievementFrame.criteriaTable[1]:ClearAllPoints();
+		AchievementsFrame.criteriaTable[1]:ClearAllPoints();
 		if ( textStrings == 1 ) then
-			AchievementFrame.criteriaTable[1]:SetPoint("TOP", AchievementFrame.progressBarTable[progressBars], "BOTTOM", -14, -4);
+			AchievementsFrame.criteriaTable[1]:SetPoint("TOP", AchievementsFrame.progressBarTable[progressBars], "BOTTOM", -14, -4);
 		else
-			AchievementFrame.criteriaTable[1]:SetPoint("TOP", AchievementFrame.progressBarTable[progressBars], "BOTTOM", 0, -4);
-			AchievementFrame.criteriaTable[1]:SetPoint("LEFT", objectivesFrame, "LEFT", 0, 0);
+			AchievementsFrame.criteriaTable[1]:SetPoint("TOP", AchievementsFrame.progressBarTable[progressBars], "BOTTOM", 0, -4);
+			AchievementsFrame.criteriaTable[1]:SetPoint("LEFT", objectivesFrame, "LEFT", 0, 0);
 		end		
 	elseif ( textStrings > 1 ) then
 		-- Figure out if we can make multiple columns worth of criteria instead of one long one
@@ -1126,7 +1126,7 @@ function AchievementObjectives_DisplayCriteria (objectivesFrame, id)
 			local step;
 			local rows = 1;
 			local position = 0;
-			for i=1, #AchievementFrame.criteriaTable do
+			for i=1, #AchievementsFrame.criteriaTable do
 				position = position + 1;
 				if ( position > numColumns ) then
 					position = position - numColumns;
@@ -1134,11 +1134,11 @@ function AchievementObjectives_DisplayCriteria (objectivesFrame, id)
 				end
 				
 				if ( rows == 1 ) then
-					AchievementFrame.criteriaTable[i]:ClearAllPoints();
-					AchievementFrame.criteriaTable[i]:SetPoint("TOPLEFT", objectivesFrame, "TOPLEFT", (position - 1)*(ACHIEVEMENTUI_MAXCONTENTWIDTH/numColumns), 0);
+					AchievementsFrame.criteriaTable[i]:ClearAllPoints();
+					AchievementsFrame.criteriaTable[i]:SetPoint("TOPLEFT", objectivesFrame, "TOPLEFT", (position - 1)*(ACHIEVEMENTUI_MAXCONTENTWIDTH/numColumns), 0);
 				else
-					AchievementFrame.criteriaTable[i]:ClearAllPoints();
-					AchievementFrame.criteriaTable[i]:SetPoint("TOPLEFT", AchievementFrame.criteriaTable[position + ((rows - 2) * numColumns)], "BOTTOMLEFT", 0, 0);
+					AchievementsFrame.criteriaTable[i]:ClearAllPoints();
+					AchievementsFrame.criteriaTable[i]:SetPoint("TOPLEFT", AchievementsFrame.criteriaTable[position + ((rows - 2) * numColumns)], "BOTTOMLEFT", 0, 0);
 				end
 			end
 			numRows = ceil(numRows/numColumns);
@@ -1170,34 +1170,34 @@ function AchievementStatButton_OnLoad(self, parentFrame)
 end
 
 -- [[ Summary Frame ]] --
-function AchievementFrameSummary_OnShow()
+function AchievementsFrameSummary_OnShow()
 	if ( achievementFunctions ~= COMPARISON_ACHIEVEMENT_FUNCTIONS and achievementFunctions ~= COMPARISON_STAT_FUNCTIONS ) then
-		AchievementFrameSummary:SetWidth(530);
-		AchievementFrameSummary_Update();
+		AchievementsFrameSummary:SetWidth(530);
+		AchievementsFrameSummary_Update();
 	else
-		AchievementFrameComparisonDark:Hide();
-		AchievementFrameComparisonWatermark:Hide();
-		AchievementFrameComparison:SetWidth(650);
-		AchievementFrameSummary:SetWidth(650);
-		AchievementFrameSummary_Update(true);
+		AchievementsFrameComparisonDark:Hide();
+		AchievementsFrameComparisonWatermark:Hide();
+		AchievementsFrameComparison:SetWidth(650);
+		AchievementsFrameSummary:SetWidth(650);
+		AchievementsFrameSummary_Update(true);
 	end
 end
 
-function AchievementFrameSummary_Update(isCompare)
-	AchievementFrameSummaryCategoriesStatusBar_Update();
+function AchievementsFrameSummary_Update(isCompare)
+	AchievementsFrameSummaryCategoriesStatusBar_Update();
 	-- Refresh the suggested-achievements pool so empty slots in the Recent
 	-- Achievements panel are filled with relevant incomplete achievements
 	-- rather than placeholder defaults.
 	if Achievements and Achievements.GetSuggestedAchievements then
 		ACHIEVEMENTUI_DEFAULTSUMMARYACHIEVEMENTS = Achievements.GetSuggestedAchievements();
 	end
-	AchievementFrameSummary_UpdateAchievements(GetLatestCompletedAchievements());
+	AchievementsFrameSummary_UpdateAchievements(GetLatestCompletedAchievements());
 end
 
-function AchievementFrameSummary_UpdateAchievements(...)
+function AchievementsFrameSummary_UpdateAchievements(...)
 	local numAchievements = select("#", ...);
 	local id, name, points, completed, month, day, year, description, flags, icon;
-	local buttons = AchievementFrameSummaryAchievements.buttons;
+	local buttons = AchievementsFrameSummaryAchievements.buttons;
 	local button, anchorTo, achievementID;
 	local defaultAchievementCount = 1;
 
@@ -1206,21 +1206,21 @@ function AchievementFrameSummary_UpdateAchievements(...)
 			button = buttons[i];
 		end
 		if ( not button ) then
-			button = CreateFrame("Button", "AchievementFrameSummaryAchievement"..i, AchievementFrameSummaryAchievements, "SummaryAchievementTemplate");
+			button = CreateFrame("Button", "AchievementsFrameSummaryAchievement"..i, AchievementsFrameSummaryAchievements, "SummaryAchievementTemplate");
 			
 			if ( i == 1 ) then
-				button:SetPoint("TOPLEFT",AchievementFrameSummaryAchievementsHeader, "BOTTOMLEFT", 18, 2 );
-				button:SetPoint("TOPRIGHT",AchievementFrameSummaryAchievementsHeader, "BOTTOMRIGHT", -18, 2 );
+				button:SetPoint("TOPLEFT",AchievementsFrameSummaryAchievementsHeader, "BOTTOMLEFT", 18, 2 );
+				button:SetPoint("TOPRIGHT",AchievementsFrameSummaryAchievementsHeader, "BOTTOMRIGHT", -18, 2 );
 			else
-				anchorTo = _G["AchievementFrameSummaryAchievement"..i-1];
+				anchorTo = _G["AchievementsFrameSummaryAchievement"..i-1];
 				button:SetPoint("TOPLEFT",anchorTo, "BOTTOMLEFT", 0, 3 );
 				button:SetPoint("TOPRIGHT",anchorTo, "BOTTOMRIGHT", 0, 3 );
 			end
 			
 			if ( not buttons ) then
-				buttons = AchievementFrameSummaryAchievements.buttons;
+				buttons = AchievementsFrameSummaryAchievements.buttons;
 			end
-			AchievementFrameSummary_LocalizeButton(button);
+			AchievementsFrameSummary_LocalizeButton(button);
 		end;
 		
 		if ( i <= numAchievements ) then
@@ -1288,30 +1288,30 @@ function AchievementFrameSummary_UpdateAchievements(...)
 		end
 	end
 	if ( numAchievements == 0 ) then
-		AchievementFrameSummaryAchievementsEmptyText:Show();
+		AchievementsFrameSummaryAchievementsEmptyText:Show();
 	else
-		AchievementFrameSummaryAchievementsEmptyText:Hide();
+		AchievementsFrameSummaryAchievementsEmptyText:Hide();
 	end
 end
 
-function AchievementFrameSummaryCategoriesStatusBar_Update()
+function AchievementsFrameSummaryCategoriesStatusBar_Update()
 	local total, completed = GetNumCompletedAchievements();
-	AchievementFrameSummaryCategoriesStatusBar:SetMinMaxValues(0, total);
-	AchievementFrameSummaryCategoriesStatusBar:SetValue(completed);
-	AchievementFrameSummaryCategoriesStatusBarText:SetText(completed.."/"..total);
+	AchievementsFrameSummaryCategoriesStatusBar:SetMinMaxValues(0, total);
+	AchievementsFrameSummaryCategoriesStatusBar:SetValue(completed);
+	AchievementsFrameSummaryCategoriesStatusBarText:SetText(completed.."/"..total);
 end
 
-function AchievementFrameSummaryAchievement_OnLoad(self)
+function AchievementsFrameSummaryAchievement_OnLoad(self)
 	AchievementComparisonPlayerButton_OnLoad(self);
 	self.highlight = _G[self:GetName().."Highlight"];
-	AchievementFrameSummaryAchievements.buttons = AchievementFrameSummaryAchievements.buttons or {};
-	tinsert(AchievementFrameSummaryAchievements.buttons, self);
+	AchievementsFrameSummaryAchievements.buttons = AchievementsFrameSummaryAchievements.buttons or {};
+	tinsert(AchievementsFrameSummaryAchievements.buttons, self);
 	self:Saturate();
 	self.titleBar:SetVertexColor(1,1,1,0.5);
 	self.dateCompleted:Show();
 end
 
-function AchievementFrameSummaryCategory_OnLoad (self)
+function AchievementsFrameSummaryCategory_OnLoad (self)
 	self:SetMinMaxValues(0, 100);
 	self:SetValue(0);
 	local name = self:GetName();
@@ -1322,21 +1322,21 @@ function AchievementFrameSummaryCategory_OnLoad (self)
 end
 
 function AchievementFrame_SelectAchievement(id, forceSelect)
-	if ( not AchievementFrame:IsShown() and not forceSelect ) then
+	if ( not AchievementsFrame:IsShown() and not forceSelect ) then
 		return;
 	end
 	
 	local _, _, _, achCompleted = GetAchievementInfo(id);
-	if ( achCompleted and (ACHIEVEMENTUI_SELECTEDFILTER == AchievementFrameFilters[ACHIEVEMENT_FILTER_INCOMPLETE].func) ) then
+	if ( achCompleted and (ACHIEVEMENTUI_SELECTEDFILTER == AchievementsFrameFilters[ACHIEVEMENT_FILTER_INCOMPLETE].func) ) then
 		AchievementFrame_SetFilter(ACHIEVEMENT_FILTER_ALL);
-	elseif ( (not achCompleted) and (ACHIEVEMENTUI_SELECTEDFILTER == AchievementFrameFilters[ACHIEVEMENT_FILTER_COMPLETE].func) ) then
+	elseif ( (not achCompleted) and (ACHIEVEMENTUI_SELECTEDFILTER == AchievementsFrameFilters[ACHIEVEMENT_FILTER_COMPLETE].func) ) then
 		AchievementFrame_SetFilter(ACHIEVEMENT_FILTER_ALL);
 	end
 	
-	AchievementFrameTab_OnClick = AchievementFrameBaseTab_OnClick;
-	AchievementFrameTab_OnClick(1);
-	AchievementFrameSummary:Hide();
-	AchievementFrameAchievements:Show();
+	AchievementsFrameTab_OnClick = AchievementsFrameBaseTab_OnClick;
+	AchievementsFrameTab_OnClick(1);
+	AchievementsFrameSummary:Hide();
+	AchievementsFrameAchievements:Show();
 
 	-- Figure out if this is part of a progressive achievement; if it is and it's incomplete, make sure the previous level was completed. If not, find the first incomplete achievement in the chain and display that instead.
 	local _, _, _, completed = GetAchievementInfo(id);
@@ -1365,7 +1365,7 @@ function AchievementFrame_SelectAchievement(id, forceSelect)
 		end
 	end
 	
-	AchievementFrameCategories_ClearSelection();
+	AchievementsFrameCategories_ClearSelection();
 	local category = GetAchievementCategory(id);
 	
 	local categoryIndex, parent, hidden = 0;
@@ -1388,23 +1388,23 @@ function AchievementFrame_SelectAchievement(id, forceSelect)
 	end
 		
 	achievementFunctions.selectedCategory = category;
-	AchievementFrameCategoriesContainerScrollBar:SetValue(0);
-	AchievementFrameCategories_Update();
+	AchievementsFrameCategoriesContainerScrollBar:SetValue(0);
+	AchievementsFrameCategories_Update();
 	
 	local shown, i = false, 1;
 	while ( not shown ) do
-		for _, button in next, AchievementFrameCategoriesContainer.buttons do
-			if ( button.categoryID == category and math.ceil(button:GetBottom()) >= math.ceil(AchievementFrameAchievementsContainer:GetBottom())) then
+		for _, button in next, AchievementsFrameCategoriesContainer.buttons do
+			if ( button.categoryID == category and math.ceil(button:GetBottom()) >= math.ceil(AchievementsFrameAchievementsContainer:GetBottom())) then
 				shown = true;
 			end
 		end
 		
 		if ( not shown ) then
-			local _, maxVal = AchievementFrameCategoriesContainerScrollBar:GetMinMaxValues();
-			if ( AchievementFrameCategoriesContainerScrollBar:GetValue() == maxVal ) then
+			local _, maxVal = AchievementsFrameCategoriesContainerScrollBar:GetMinMaxValues();
+			if ( AchievementsFrameCategoriesContainerScrollBar:GetValue() == maxVal ) then
 				return;
 			else
-				HybridScrollFrame_OnMouseWheel(AchievementFrameCategoriesContainer, -1);
+				HybridScrollFrame_OnMouseWheel(AchievementsFrameCategoriesContainer, -1);
 			end			
 		end
 		
@@ -1415,14 +1415,14 @@ function AchievementFrame_SelectAchievement(id, forceSelect)
 		end
 	end		
 	
-	AchievementFrameAchievements_ClearSelection();	
-	AchievementFrameAchievementsContainerScrollBar:SetValue(0);
-	AchievementFrameAchievements_Update();
+	AchievementsFrameAchievements_ClearSelection();	
+	AchievementsFrameAchievementsContainerScrollBar:SetValue(0);
+	AchievementsFrameAchievements_Update();
 	
 	shown = false;
 	while ( not shown ) do
-		for _, button in next, AchievementFrameAchievementsContainer.buttons do
-			if ( button.id == id and math.ceil(button:GetTop()) >= math.ceil(AchievementFrameAchievementsContainer:GetBottom())) then
+		for _, button in next, AchievementsFrameAchievementsContainer.buttons do
+			if ( button.id == id and math.ceil(button:GetTop()) >= math.ceil(AchievementsFrameAchievementsContainer:GetBottom())) then
 				-- The "True" here ignores modifiers, so you don't accidentally track or link this achievement. :P
 				AchievementButton_OnClick(button, true);
 				
@@ -1432,29 +1432,29 @@ function AchievementFrame_SelectAchievement(id, forceSelect)
 			end
 		end			
 		
-		local _, maxVal = AchievementFrameAchievementsContainerScrollBar:GetMinMaxValues();
+		local _, maxVal = AchievementsFrameAchievementsContainerScrollBar:GetMinMaxValues();
 		if ( shown ) then
 			-- If we can, move the achievement we're scrolling to to the top of the screen.
-			local newHeight = AchievementFrameAchievementsContainerScrollBar:GetValue() + AchievementFrameAchievementsContainer:GetTop() - shown:GetTop();
+			local newHeight = AchievementsFrameAchievementsContainerScrollBar:GetValue() + AchievementsFrameAchievementsContainer:GetTop() - shown:GetTop();
 			newHeight = min(newHeight, maxVal);
-			AchievementFrameAchievementsContainerScrollBar:SetValue(newHeight);
+			AchievementsFrameAchievementsContainerScrollBar:SetValue(newHeight);
 		else
-			if ( AchievementFrameAchievementsContainerScrollBar:GetValue() == maxVal ) then
+			if ( AchievementsFrameAchievementsContainerScrollBar:GetValue() == maxVal ) then
 				return;
 			else
-				HybridScrollFrame_OnMouseWheel(AchievementFrameAchievementsContainer, -1);
+				HybridScrollFrame_OnMouseWheel(AchievementsFrameAchievementsContainer, -1);
 			end			
 		end
 	end
 end
 
 function AchievementFrame_SelectSummaryStatistic (criteriaId)
-	AchievementFrameTab_OnClick = AchievementFrameBaseTab_OnClick;
-	AchievementFrameTab_OnClick(2);
-	AchievementFrameStats:Show();
-	AchievementFrameSummary:Hide();
+	AchievementsFrameTab_OnClick = AchievementsFrameBaseTab_OnClick;
+	AchievementsFrameTab_OnClick(2);
+	AchievementsFrameStats:Show();
+	AchievementsFrameSummary:Hide();
 	
-	AchievementFrameCategories_ClearSelection();
+	AchievementsFrameCategories_ClearSelection();
 	
 	local id = GetAchievementInfoFromCriteria(criteriaId);
 	local category = GetAchievementCategory(id);
@@ -1479,23 +1479,23 @@ function AchievementFrame_SelectSummaryStatistic (criteriaId)
 	end
 	
 	achievementFunctions.selectedCategory = category;
-	AchievementFrameCategories_Update();
-	AchievementFrameCategoriesContainerScrollBar:SetValue(0);
+	AchievementsFrameCategories_Update();
+	AchievementsFrameCategoriesContainerScrollBar:SetValue(0);
 	
 	local shown, i = false, 1;
 	while ( not shown ) do
-		for _, button in next, AchievementFrameCategoriesContainer.buttons do
-			if ( button.categoryID == category and math.ceil(button:GetBottom()) >= math.ceil(AchievementFrameAchievementsContainer:GetBottom())) then
+		for _, button in next, AchievementsFrameCategoriesContainer.buttons do
+			if ( button.categoryID == category and math.ceil(button:GetBottom()) >= math.ceil(AchievementsFrameAchievementsContainer:GetBottom())) then
 				shown = true;
 			end
 		end
 		
 		if ( not shown ) then
-			local _, maxVal = AchievementFrameCategoriesContainerScrollBar:GetMinMaxValues();
-			if ( AchievementFrameCategoriesContainerScrollBar:GetValue() == maxVal ) then
+			local _, maxVal = AchievementsFrameCategoriesContainerScrollBar:GetMinMaxValues();
+			if ( AchievementsFrameCategoriesContainerScrollBar:GetValue() == maxVal ) then
 				return;
 			else
-				HybridScrollFrame_OnMouseWheel(AchievementFrameCategoriesContainer, -1);
+				HybridScrollFrame_OnMouseWheel(AchievementsFrameCategoriesContainer, -1);
 			end			
 		end
 		
@@ -1505,13 +1505,13 @@ function AchievementFrame_SelectSummaryStatistic (criteriaId)
 		end
 	end		
 	
-	AchievementFrameStats_Update();
-	AchievementFrameStatsContainerScrollBar:SetValue(0);
+	AchievementsFrameStats_Update();
+	AchievementsFrameStatsContainerScrollBar:SetValue(0);
 	
 	shown, i = false, 1;
 	while ( not shown ) do
-		for _, button in next, AchievementFrameStatsContainer.buttons do
-			if ( button.id == id and math.ceil(button:GetBottom()) >= math.ceil(AchievementFrameStatsContainer:GetBottom())) then
+		for _, button in next, AchievementsFrameStatsContainer.buttons do
+			if ( button.id == id and math.ceil(button:GetBottom()) >= math.ceil(AchievementsFrameStatsContainer:GetBottom())) then
 				AchievementStatButton_OnClick(button);
 				
 				-- We found the button! MAKE IT SHOWN ZOMG!
@@ -1519,15 +1519,15 @@ function AchievementFrame_SelectSummaryStatistic (criteriaId)
 			end
 		end			
 		
-		if ( shown and AchievementFrameStatsContainerScrollBar:IsShown() ) then
+		if ( shown and AchievementsFrameStatsContainerScrollBar:IsShown() ) then
 			-- If we can, move the achievement we're scrolling to to the top of the screen.
-			AchievementFrameStatsContainerScrollBar:SetValue(AchievementFrameStatsContainerScrollBar:GetValue() + AchievementFrameStatsContainer:GetTop() - shown:GetTop());
+			AchievementsFrameStatsContainerScrollBar:SetValue(AchievementsFrameStatsContainerScrollBar:GetValue() + AchievementsFrameStatsContainer:GetTop() - shown:GetTop());
 		elseif ( not shown ) then
-			local _, maxVal = AchievementFrameStatsContainerScrollBar:GetMinMaxValues();
-			if ( AchievementFrameStatsContainerScrollBar:GetValue() == maxVal ) then
+			local _, maxVal = AchievementsFrameStatsContainerScrollBar:GetMinMaxValues();
+			if ( AchievementsFrameStatsContainerScrollBar:GetValue() == maxVal ) then
 				return;
 			else
-				HybridScrollFrame_OnMouseWheel(AchievementFrameStatsContainer, -1);
+				HybridScrollFrame_OnMouseWheel(AchievementsFrameStatsContainer, -1);
 			end			
 		end
 		
@@ -1538,58 +1538,58 @@ function AchievementFrame_SelectSummaryStatistic (criteriaId)
 	end
 end
 
-function AchievementFrameComparison_OnLoad (self)
-	AchievementFrameComparisonContainer_OnLoad(self);
-	AchievementFrameComparisonStatsContainer_OnLoad(self);
+function AchievementsFrameComparison_OnLoad (self)
+	AchievementsFrameComparisonContainer_OnLoad(self);
+	AchievementsFrameComparisonStatsContainer_OnLoad(self);
 	self:RegisterEvent("ACHIEVEMENT_EARNED");
 	self:RegisterEvent("INSPECT_ACHIEVEMENT_READY");
 end
 
-function AchievementFrameComparison_OnShow ()
-	AchievementFrameStats:Hide();
-	AchievementFrameAchievements:Hide();
-	AchievementFrame:SetWidth(890);
-	AchievementFrame:SetAttribute("UIPanelLayout-xOffset", 38);
-	UpdateUIPanelPositions(AchievementFrame);
-	AchievementFrame.isComparison = true;
+function AchievementsFrameComparison_OnShow ()
+	AchievementsFrameStats:Hide();
+	AchievementsFrameAchievements:Hide();
+	AchievementsFrame:SetWidth(890);
+	AchievementsFrame:SetAttribute("UIPanelLayout-xOffset", 38);
+	UpdateUIPanelPositions(AchievementsFrame);
+	AchievementsFrame.isComparison = true;
 end
 
-function AchievementFrameComparison_OnHide ()
-	AchievementFrame.selectedTab = nil;
-	AchievementFrame:SetWidth(768);
-	AchievementFrame:SetAttribute("UIPanelLayout-xOffset", 80);
-	UpdateUIPanelPositions(AchievementFrame);
-	AchievementFrame.isComparison = false;
+function AchievementsFrameComparison_OnHide ()
+	AchievementsFrame.selectedTab = nil;
+	AchievementsFrame:SetWidth(768);
+	AchievementsFrame:SetAttribute("UIPanelLayout-xOffset", 80);
+	UpdateUIPanelPositions(AchievementsFrame);
+	AchievementsFrame.isComparison = false;
 	ClearAchievementComparisonUnit();
 end
 
-function AchievementFrameComparison_OnEvent (self, event, ...)
+function AchievementsFrameComparison_OnEvent (self, event, ...)
 	if ( event == "INSPECT_ACHIEVEMENT_READY" ) then
-		AchievementFrameComparisonHeaderPoints:SetText(GetComparisonAchievementPoints());
-		AchievementFrameComparison_UpdateStatusBars(achievementFunctions.selectedCategory)
+		AchievementsFrameComparisonHeaderPoints:SetText(GetComparisonAchievementPoints());
+		AchievementsFrameComparison_UpdateStatusBars(achievementFunctions.selectedCategory)
 	elseif ( event == "UNIT_PORTRAIT_UPDATE" ) then
 		local updateUnit = ...;
-		if ( updateUnit and updateUnit == AchievementFrameComparisonHeaderPortrait.unit and UnitName(updateUnit) == AchievementFrameComparisonHeaderName:GetText() ) then
-			SetPortraitTexture(AchievementFrameComparisonHeaderPortrait, updateUnit);
+		if ( updateUnit and updateUnit == AchievementsFrameComparisonHeaderPortrait.unit and UnitName(updateUnit) == AchievementsFrameComparisonHeaderName:GetText() ) then
+			SetPortraitTexture(AchievementsFrameComparisonHeaderPortrait, updateUnit);
 		end
 	end
 	
-	AchievementFrameComparison_ForceUpdate();
+	AchievementsFrameComparison_ForceUpdate();
 end
 
-function AchievementFrameComparison_SetUnit (unit)
+function AchievementsFrameComparison_SetUnit (unit)
 	ClearAchievementComparisonUnit();
 	SetAchievementComparisonUnit(unit);
 	
-	AchievementFrameComparisonHeaderPoints:SetText(GetComparisonAchievementPoints());
-	AchievementFrameComparisonHeaderName:SetText(UnitName(unit));
-	SetPortraitTexture(AchievementFrameComparisonHeaderPortrait, unit);
-	AchievementFrameComparisonHeaderPortrait.unit = unit;
-	AchievementFrameComparisonHeaderPortrait.race = UnitRace(unit);
-	AchievementFrameComparisonHeaderPortrait.sex = UnitSex(unit);
+	AchievementsFrameComparisonHeaderPoints:SetText(GetComparisonAchievementPoints());
+	AchievementsFrameComparisonHeaderName:SetText(UnitName(unit));
+	SetPortraitTexture(AchievementsFrameComparisonHeaderPortrait, unit);
+	AchievementsFrameComparisonHeaderPortrait.unit = unit;
+	AchievementsFrameComparisonHeaderPortrait.race = UnitRace(unit);
+	AchievementsFrameComparisonHeaderPortrait.sex = UnitSex(unit);
 end
 
-function AchievementFrameComparison_DisplayAchievement (button, category, index)
+function AchievementsFrameComparison_DisplayAchievement (button, category, index)
 	local id, name, points, completed, month, day, year, description, flags, icon, rewardText = GetAchievementInfo(category, index);
 	if ( not id ) then
 		button:Hide();
@@ -1654,7 +1654,7 @@ function AchievementFrameComparison_DisplayAchievement (button, category, index)
 	end
 end
 
-function AchievementFrameComparisonStat_OnLoad (self)
+function AchievementsFrameComparisonStat_OnLoad (self)
 	local name = self:GetName();
 	self.background = _G[name.."BG"];
 	self.left = _G[name.."HeaderLeft"];
@@ -1755,7 +1755,7 @@ function AchievementComparisonFriendButton_OnLoad (self)
 end
 
 function AchievementFrame_IsFeatOfStrength()
-	if ( AchievementFrame.selectedTab == 1 and achievementFunctions.selectedCategory == AchievementFrame.displayCategories[#AchievementFrame.displayCategories].id ) then
+	if ( AchievementsFrame.selectedTab == 1 and achievementFunctions.selectedCategory == AchievementsFrame.displayCategories[#AchievementsFrame.displayCategories].id ) then
 		return true;
 	end
 	return false;
@@ -1763,38 +1763,38 @@ end
 
 ACHIEVEMENT_TEXTURES_TO_LOAD = {
 	{	
-		name="AchievementFrameAchievementsBackground", 
+		name="AchievementsFrameAchievementsBackground", 
 		file="Interface\\AchievementFrame\\UI-Achievement-AchievementBackground",
 	},
 	{	
-		name="AchievementFrameSummaryBackground", 
+		name="AchievementsFrameSummaryBackground", 
 		file="Interface\\AchievementFrame\\UI-Achievement-AchievementBackground",
 	},
 	{	
-		name="AchievementFrameComparisonBackground", 
+		name="AchievementsFrameComparisonBackground", 
 		file="Interface\\AchievementFrame\\UI-Achievement-AchievementBackground",
 	},
 	{	
-		name="AchievementFrameCategoriesBG", 
+		name="AchievementsFrameCategoriesBG", 
 		file="Interface\\AchievementFrame\\UI-Achievement-AchievementBackground",
 	},
 	{	
-		name="AchievementFrameWaterMark", 
+		name="AchievementsFrameWaterMark", 
 	},
 	{	
-		name="AchievementFrameHeaderLeft", 
+		name="AchievementsFrameHeaderLeft", 
 		file="Interface\\AchievementFrame\\UI-Achievement-Header",
 	},
 	{	
-		name="AchievementFrameHeaderRight", 
+		name="AchievementsFrameHeaderRight", 
 		file="Interface\\AchievementFrame\\UI-Achievement-Header",
 	},
 	{	
-		name="AchievementFrameHeaderPointBorder", 
+		name="AchievementsFrameHeaderPointBorder", 
 		file="Interface\\AchievementFrame\\UI-Achievement-Header",
 	},
 	{	
-		name="AchievementFrameComparisonWatermark", 
+		name="AchievementsFrameComparisonWatermark", 
 		file="Interface\\AchievementFrame\\UI-Achievement-StatsComparisonBackground",
 	},
 }

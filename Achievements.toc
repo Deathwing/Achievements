@@ -1,9 +1,9 @@
-## Interface: 20505, 11508
+## Interface: 20506, 11508
 ## Title: Achievements
 ## Notes: Blizzard Achievement UI compatibility layer for Classic Era and The Burning Crusade.
 ## IconTexture: Interface\AddOns\Achievements\Media\logo.png
 ## Author: Deathwing
-## Version: 1.0.5
+## Version: 1.0.6
 ## X-License: GNU GPL3
 ## X-Category: Achievements
 # ACHIEVEMENTS_UNCOMMENT_NEXT_LINE
@@ -31,7 +31,12 @@ AchievementsWatchFrame.lua
 AchievementsBootstrap.lua
 AchievementsAPI.lua
 
-Blizzard_AchievementUI/Blizzard_AchievementUI.lua [AllowLoadGameType vanilla]
-Blizzard_AchievementUI/Blizzard_AchievementUI_Shared.lua [AllowLoadGameType vanilla]
-Blizzard_AchievementUI/Blizzard_AchievementUI.xml [AllowLoadGameType vanilla]
-Blizzard_AchievementUI/Localization.lua [AllowLoadGameType vanilla]
+Vanilla/Blizzard_AchievementUI/Blizzard_AchievementUI.lua [AllowLoadGameType vanilla]
+Vanilla/Blizzard_AchievementUI/Blizzard_AchievementUI_Shared.lua [AllowLoadGameType vanilla]
+Vanilla/Blizzard_AchievementUI/Blizzard_AchievementUI.xml [AllowLoadGameType vanilla]
+Vanilla/Blizzard_AchievementUI/Localization.lua [AllowLoadGameType vanilla]
+
+TBC/Blizzard_AchievementUI/Blizzard_AchievementUI.lua [AllowLoadGameType tbc]
+TBC/Blizzard_AchievementUI/Blizzard_AchievementUI_Shared.lua [AllowLoadGameType tbc]
+TBC/Blizzard_AchievementUI/Blizzard_AchievementUI.xml [AllowLoadGameType tbc]
+TBC/Blizzard_AchievementUI/Localization.lua [AllowLoadGameType tbc]

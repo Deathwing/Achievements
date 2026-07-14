@@ -5,9 +5,9 @@ Achievements brings a Blizzard-style achievement system to World of Warcraft Cla
 ## Supported Clients
 
 - Classic Era (`11508`)
-- The Burning Crusade / Anniversary (`20505`)
+- The Burning Crusade / Anniversary (`20506`)
 
-Classic Era uses bundled Blizzard achievement UI files because the client blocks the native achievement UI. The Burning Crusade uses the client-provided achievement UI where available, with runtime patches for Classic-specific behavior.
+Both clients use achievement UI files bundled with the addon (a per-client copy under `Vanilla/` and `TBC/`). The native load-on-demand `Blizzard_AchievementUI` addon is never loaded: on Classic Era the client blocks it, and on The Burning Crusade loading it from an addon taints Blizzard's protected code and blocks logging out. A chat warning is shown if another addon force-loads `Blizzard_AchievementUI`.
 
 ## Required Addons
 

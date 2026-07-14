@@ -1,6 +1,6 @@
 -- This file is executed at the end of addon load
 
-function AchievementFrameSummary_LocalizeButton (button)
+function AchievementsFrameSummary_LocalizeButton (button)
 
 end
 
@@ -39,7 +39,7 @@ local l10nTable = {
 	zhCN = {},
 	zhTW = {
 		localize = function()
-			AchievementFrameSummary_LocalizeButton = function(button)
+			AchievementsFrameSummary_LocalizeButton = function(button)
 				button.label:SetPoint("TOP", 0, -4);
 				button.description:SetPoint("TOP", 0, -27);
 				button.description:SetFontObject("AchievementFont_Small");
@@ -80,11 +80,11 @@ local l10nTable = {
 				button.friend.shield.points:SetFontObject("GameFontBlack");
 			end
 
-			for _, button in next, AchievementFrameAchievementsContainer.buttons do
+			for _, button in next, AchievementsFrameAchievementsContainer.buttons do
 				AchievementButton_Localize(button);
 			end
 
-			for _, button in next, AchievementFrameComparisonContainer.buttons do
+			for _, button in next, AchievementsFrameComparisonContainer.buttons do
 				AchievementComparisonButton_Localize(button);
 			end
 		end,

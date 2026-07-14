@@ -186,6 +186,12 @@ Private.LEGACY_MICRO_BUTTON_SPACING = LEGACY_MICRO_BUTTON_SPACING;
 Private.dataVersion = ACHIEVEMENTS_DATA.version;
 Private.data = {
 	version = ACHIEVEMENTS_DATA.version,
+	-- Export the UI order tables by reference. Extension addons (e.g.
+	-- AchievementsPlus) must mutate the same tables GetCategoryList() returns;
+	-- reading them from _G.AchievementsData is not safe because a standalone
+	-- AchievementsData addon can replace that global after this addon loaded.
+	categoryOrder = CATEGORY_ORDER,
+	statisticsCategoryOrder = STATISTICS_CATEGORY_ORDER,
 	categories = CATEGORY_DATA,
 	titles = TITLE_DATA,
 	achievements = ACHIEVEMENT_DATA,
@@ -831,29 +837,29 @@ local function DispatchFrameEvent(frame, event, ...)
 end
 
 local function RefreshAchievementFrameTracking()
-	if not AchievementFrame or type(AchievementFrame.trackedAchievements) ~= "table" then
+	if not AchievementsFrame or type(AchievementsFrame.trackedAchievements) ~= "table" then
 		return;
 	end
 
-	for achievementID in pairs(AchievementFrame.trackedAchievements) do
-		AchievementFrame.trackedAchievements[achievementID] = nil;
+	for achievementID in pairs(AchievementsFrame.trackedAchievements) do
+		AchievementsFrame.trackedAchievements[achievementID] = nil;
 	end
 
 	if AchievementFrame_UpdateTrackedAchievements then
 		AchievementFrame_UpdateTrackedAchievements(Achievements.GetTrackedAchievements());
 	else
 		for achievementID in pairs(trackedAchievements) do
-			AchievementFrame.trackedAchievements[achievementID] = true;
+			AchievementsFrame.trackedAchievements[achievementID] = true;
 		end
 	end
 end
 
 local function NotifyTrackedAchievementsChanged()
 	RefreshAchievementFrameTracking();
-	DispatchFrameEvent(AchievementFrameAchievements, "TRACKED_ACHIEVEMENT_LIST_CHANGED");
+	DispatchFrameEvent(AchievementsFrameAchievements, "TRACKED_ACHIEVEMENT_LIST_CHANGED");
 
-	if AchievementFrameAchievements and AchievementFrameAchievements:IsVisible() and AchievementFrameAchievements_ForceUpdate then
-		AchievementFrameAchievements_ForceUpdate();
+	if AchievementsFrameAchievements and AchievementsFrameAchievements:IsVisible() and AchievementsFrameAchievements_ForceUpdate then
+		AchievementsFrameAchievements_ForceUpdate();
 	end
 
 	if Achievements.WatchFrame_Update then
@@ -862,7 +868,7 @@ local function NotifyTrackedAchievementsChanged()
 end
 
 local function EnsureAchievementUIForNotification()
-	if AchievementFrame and AchievementShield_SetPoints then
+	if AchievementsFrame and AchievementShield_SetPoints then
 		return;
 	end
 
@@ -890,7 +896,7 @@ local function PlayAchievementEarnedSound()
 		return;
 	end
 
-	local willPlay = PlaySoundFile(ACHIEVEMENT_EARNED_SOUND_FILE, "Master");
+	local willPlay = PlaySoundFile(ACHIEVEMENT_EARNED_SOUND_FILE, "SFX");
 	if willPlay ~= false then
 		lastAchievementEarnedSoundTime = currentTime;
 	end
@@ -907,16 +913,16 @@ local function NotifyAchievementEarned(achievementID, showAlert)
 		QueueAchievementAlert(achievementID);
 	end
 
-	DispatchFrameEvent(AchievementFrameAchievements, "ACHIEVEMENT_EARNED", achievementID);
-	DispatchFrameEvent(AchievementFrameStats, "CRITERIA_UPDATE");
-	DispatchFrameEvent(AchievementFrameComparison, "ACHIEVEMENT_EARNED", achievementID);
+	DispatchFrameEvent(AchievementsFrameAchievements, "ACHIEVEMENT_EARNED", achievementID);
+	DispatchFrameEvent(AchievementsFrameStats, "CRITERIA_UPDATE");
+	DispatchFrameEvent(AchievementsFrameComparison, "ACHIEVEMENT_EARNED", achievementID);
 
 	-- Only refresh the summary frame on user-visible completions. Silent state-sync
 	-- (e.g. GetAchievementState lazily marking previously-earned achievements) must
 	-- never trigger a summary update because the summary itself iterates achievements
 	-- via GetAchievementState and would re-enter this function recursively.
-	if showAlert and AchievementFrameSummary and AchievementFrameSummary:IsShown() and AchievementFrameSummary_Update then
-		AchievementFrameSummary_Update();
+	if showAlert and AchievementsFrameSummary and AchievementsFrameSummary:IsShown() and AchievementsFrameSummary_Update then
+		AchievementsFrameSummary_Update();
 	end
 end
 
@@ -1699,8 +1705,8 @@ end
 function Achievements.AddTrackedAchievement(achievementID)
 	if ACHIEVEMENT_DATA[achievementID] and ShouldShowAchievementInUI(achievementID) and not IsAchievementCompleted(achievementID) and not trackedAchievements[achievementID] then
 		trackedAchievements[achievementID] = true;
-		if AchievementFrame and AchievementFrame.trackedAchievements then
-			AchievementFrame.trackedAchievements[achievementID] = true;
+		if AchievementsFrame and AchievementsFrame.trackedAchievements then
+			AchievementsFrame.trackedAchievements[achievementID] = true;
 		end
 		NotifyTrackedAchievementsChanged();
 	end
@@ -1709,8 +1715,8 @@ end
 function Achievements.RemoveTrackedAchievement(achievementID)
 	if trackedAchievements[achievementID] then
 		trackedAchievements[achievementID] = nil;
-		if AchievementFrame and AchievementFrame.trackedAchievements then
-			AchievementFrame.trackedAchievements[achievementID] = nil;
+		if AchievementsFrame and AchievementsFrame.trackedAchievements then
+			AchievementsFrame.trackedAchievements[achievementID] = nil;
 		end
 		NotifyTrackedAchievementsChanged();
 	end
@@ -1772,7 +1778,7 @@ function Achievements.GetComparisonCategoryNumAchievements(categoryID)
 	return completed, 0;
 end
 
--- Opens the Blizzard AchievementFrame in comparison mode for the given player.
+-- Opens the Blizzard AchievementsFrame in comparison mode for the given player.
 -- Call immediately when a comparison is requested — shows the frame with
 -- whatever data is available now. Call RefreshComparisonData when the real
 -- data arrives to update in place without resetting the selected category.
@@ -1790,56 +1796,56 @@ function Achievements.OpenComparisonForName(targetName, points, completed, unit,
 		Achievements.invalidateAchievementStatsUICache();
 	end
 
-	if not AchievementFrame then
+	if not AchievementsFrame then
 		if Achievements.AchievementFrame_LoadUI then
 			Achievements.AchievementFrame_LoadUI();
 		elseif AchievementFrame_LoadUI then
 			AchievementFrame_LoadUI();
 		end
 	end
-	if not AchievementFrame then
+	if not AchievementsFrame then
 		return;
 	end
 
-	AchievementFrame.wasShown = nil;
-	AchievementFrame.isComparison = true;
-	if AchievementFrameComparisonTab_OnClick then
-		AchievementFrameTab_OnClick = AchievementFrameComparisonTab_OnClick;
-		AchievementFrameTab_OnClick(1);
+	AchievementsFrame.wasShown = nil;
+	AchievementsFrame.isComparison = true;
+	if AchievementsFrameComparisonTab_OnClick then
+		AchievementsFrameTab_OnClick = AchievementsFrameComparisonTab_OnClick;
+		AchievementsFrameTab_OnClick(1);
 	end
-	ShowUIPanel(AchievementFrame);
+	ShowUIPanel(AchievementsFrame);
 
-	if AchievementFrameComparisonHeaderName then
-		AchievementFrameComparisonHeaderName:SetText(displayName or "");
+	if AchievementsFrameComparisonHeaderName then
+		AchievementsFrameComparisonHeaderName:SetText(displayName or "");
 	end
-	if AchievementFrameComparisonHeaderPoints then
-		AchievementFrameComparisonHeaderPoints:SetText(tostring(tonumber(points) or 0));
+	if AchievementsFrameComparisonHeaderPoints then
+		AchievementsFrameComparisonHeaderPoints:SetText(tostring(tonumber(points) or 0));
 	end
-	if AchievementFrameComparisonHeaderPortrait then
+	if AchievementsFrameComparisonHeaderPortrait then
 		if unit and UnitIsConnected(unit) then
-			SetPortraitTexture(AchievementFrameComparisonHeaderPortrait, unit);
-			AchievementFrameComparisonHeaderPortrait.unit = unit;
+			SetPortraitTexture(AchievementsFrameComparisonHeaderPortrait, unit);
+			AchievementsFrameComparisonHeaderPortrait.unit = unit;
 		else
-			SetPortraitToTexture(AchievementFrameComparisonHeaderPortrait, "Interface\\ICONS\\INV_Misc_QuestionMark");
-			AchievementFrameComparisonHeaderPortrait.unit = nil;
+			SetPortraitToTexture(AchievementsFrameComparisonHeaderPortrait, "Interface\\ICONS\\INV_Misc_QuestionMark");
+			AchievementsFrameComparisonHeaderPortrait.unit = nil;
 		end
 	end
 
-	if AchievementFrameComparison_ForceUpdate then
+	if AchievementsFrameComparison_ForceUpdate then
 		-- Auto-select the first real category so the list isn't empty on open.
 		-- (Summary is always [1]; the first numeric entry is the first real category.)
 		if ACHIEVEMENTUI_CATEGORIES and COMPARISON_ACHIEVEMENT_FUNCTIONS then
 			for _, cat in next, ACHIEVEMENTUI_CATEGORIES do
 				if type(cat.id) == "number" then
 					COMPARISON_ACHIEVEMENT_FUNCTIONS.selectedCategory = cat.id;
-					if AchievementFrameComparison_UpdateStatusBars then
-						AchievementFrameComparison_UpdateStatusBars(cat.id);
+					if AchievementsFrameComparison_UpdateStatusBars then
+						AchievementsFrameComparison_UpdateStatusBars(cat.id);
 					end
 					break;
 				end
 			end
 		end
-		AchievementFrameComparison_ForceUpdate();
+		AchievementsFrameComparison_ForceUpdate();
 	end
 end
 
@@ -1866,27 +1872,27 @@ function Achievements.RefreshComparisonData(targetName, points, completed, unit,
 		state.unit = unit;
 	end
 
-	if AchievementFrameComparisonHeaderPoints then
-		AchievementFrameComparisonHeaderPoints:SetText(tostring(tonumber(points) or 0));
+	if AchievementsFrameComparisonHeaderPoints then
+		AchievementsFrameComparisonHeaderPoints:SetText(tostring(tonumber(points) or 0));
 	end
-	if AchievementFrameComparisonHeaderPortrait then
+	if AchievementsFrameComparisonHeaderPortrait then
 		local u = state.unit;
 		if u and UnitIsConnected(u) then
-			SetPortraitTexture(AchievementFrameComparisonHeaderPortrait, u);
-			AchievementFrameComparisonHeaderPortrait.unit = u;
+			SetPortraitTexture(AchievementsFrameComparisonHeaderPortrait, u);
+			AchievementsFrameComparisonHeaderPortrait.unit = u;
 		end
 	end
 
-	if AchievementFrameComparison_UpdateStatusBars and achievementFunctions == COMPARISON_ACHIEVEMENT_FUNCTIONS then
+	if AchievementsFrameComparison_UpdateStatusBars and achievementFunctions == COMPARISON_ACHIEVEMENT_FUNCTIONS then
 		local category = achievementFunctions.selectedCategory;
 		if not category or category == "summary" or category == ACHIEVEMENT_COMPARISON_STATS_SUMMARY_ID then
 			category = ACHIEVEMENT_COMPARISON_SUMMARY_ID;
 		end
-		AchievementFrameComparison_UpdateStatusBars(category);
+		AchievementsFrameComparison_UpdateStatusBars(category);
 	end
 
-	if AchievementFrameComparison_ForceUpdate then
-		AchievementFrameComparison_ForceUpdate();
+	if AchievementsFrameComparison_ForceUpdate then
+		AchievementsFrameComparison_ForceUpdate();
 	end
 end
 

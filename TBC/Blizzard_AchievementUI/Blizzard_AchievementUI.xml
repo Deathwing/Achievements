@@ -6,12 +6,12 @@
 			<KeyValue key="backdropBorderColor" value="ACHIEVEMENT_GOLD_BORDER_COLOR" type="global"/>
 		</KeyValues>
 		<Scripts>
-			<OnLoad inherit="prepend" function="AchievementFrameAchievementsBackdrop_OnLoad"/>
+			<OnLoad inherit="prepend" function="AchievementsFrameAchievementsBackdrop_OnLoad"/>
 		</Scripts>
 	</Frame>
 	
 	
-	<StatusBar name="AchievementFrameSummaryCategoryTemplate" drawLayer="BORDER" virtual="true">
+	<StatusBar name="AchievementsFrameSummaryCategoryTemplate" drawLayer="BORDER" virtual="true">
 		<Size>
 			<AbsDimension x="234" y="21"/>
 		</Size>
@@ -120,7 +120,7 @@
 				</Frames>
 				<Scripts>
 					<OnClick>
-						AchievementFrameSummaryCategoryButton_OnClick(self, button, down);
+						AchievementsFrameSummaryCategoryButton_OnClick(self, button, down);
 					</OnClick>
 					<OnEnter>
 						_G[self:GetName().."Highlight"]:Show();
@@ -133,16 +133,16 @@
 		</Frames>
 		<Scripts>
 			<OnLoad>
-				AchievementFrameSummaryCategory_OnLoad(self);
+				AchievementsFrameSummaryCategory_OnLoad(self);
 			</OnLoad>
 			<OnShow>
-				AchievementFrameSummaryCategory_OnShow(self);
+				AchievementsFrameSummaryCategory_OnShow(self);
 			</OnShow>
 			<OnHide>
-				AchievementFrameSummaryCategory_OnHide(self);
+				AchievementsFrameSummaryCategory_OnHide(self);
 			</OnHide>
 			<OnEvent>
-				AchievementFrameSummaryCategory_OnEvent(self, event, ...);
+				AchievementsFrameSummaryCategory_OnEvent(self, event, ...);
 			</OnEvent>
 		</Scripts>		
 		<BarTexture name="$parentBar" file="Interface\PaperDollInfoFrame\UI-Character-Skills-Bar"/>
@@ -199,7 +199,7 @@
 		<DisabledCheckedTexture file="Interface\Buttons\UI-CheckBox-Check-Disabled"/>		
 	</CheckButton>
 
-	<Button name="AchievementFrameTabButtonTemplate" virtual="true">
+	<Button name="AchievementsFrameTabButtonTemplate" virtual="true">
         <Size>
             <AbsDimension x="115" y="32"/>
         </Size>
@@ -336,8 +336,8 @@
 		<HighlightFont style="GameFontHighlightSmall"/>
 		<DisabledFont style="GameFontHighlightSmall"/>
     </Button>
-	<Frame name="AchievementFrameAchievementsObjectives"/>
-	<Frame name="MiniAchievementTemplate" virtual="true" parent="AchievementFrame">
+	<Frame name="AchievementsFrameAchievementsObjectives"/>
+	<Frame name="MiniAchievementTemplate" virtual="true" parent="AchievementsFrame">
 		<Size>
 			<AbsDimension x="42" y="42"/>
 		</Size>
@@ -1587,13 +1587,13 @@
 		</Frames>
 		<Scripts>
 			<OnLoad inherit="prepend">
-				AchievementFrameSummaryAchievement_OnLoad(self);
+				AchievementsFrameSummaryAchievement_OnLoad(self);
 			</OnLoad>
 			<OnClick>
-				AchievementFrameSummaryAchievement_OnClick(self, button, down);
+				AchievementsFrameSummaryAchievement_OnClick(self, button, down);
 			</OnClick>
 			<OnEnter>
-				AchievementFrameSummaryAchievement_OnEnter(self, motion);
+				AchievementsFrameSummaryAchievement_OnEnter(self, motion);
 			</OnEnter>
 			<OnLeave>
 				self.highlight:Hide();
@@ -1861,7 +1861,7 @@
 		</Layers>
 		<Scripts>
 			<OnLoad>
-				AchievementStatButton_OnLoad(self, AchievementFrameStats);
+				AchievementStatButton_OnLoad(self, AchievementsFrameStats);
 			</OnLoad>
 			<OnClick>
 				AchievementStatButton_OnClick(self, button, down);
@@ -2016,7 +2016,7 @@
 		</Frames>
 		<Scripts>
 			<OnLoad>
-				AchievementFrameComparisonStat_OnLoad(self);
+				AchievementsFrameComparisonStat_OnLoad(self);
 			</OnLoad>
 		</Scripts>
 	</Frame>
@@ -2025,13 +2025,13 @@
 		<Scripts>
 			<OnLoad>
 				self.summary = true;
-				AchievementStatButton_OnLoad(self, AchievementFrameSummaryStats);
+				AchievementStatButton_OnLoad(self, AchievementsFrameSummaryStats);
 				self:SetHeight(18);
 			</OnLoad>
 		</Scripts>
 	</Button>
 
-	<Frame name="AchievementFrame" toplevel="true" parent="UIParent" frameStrata="MEDIUM" hidden="true" enableMouse="true" inherits="BackdropTemplate">
+	<Frame name="AchievementsFrame" toplevel="true" parent="UIParent" frameStrata="MEDIUM" hidden="true" enableMouse="true" inherits="BackdropTemplate">
 		<Size>
 			<AbsDimension x="768" y="500"/>
 		</Size>
@@ -2266,7 +2266,7 @@
 					<AbsDimension x="726" y="106"/>
 				</Size>
 				<Anchors>
-					<Anchor point="BOTTOMLEFT" relativeTo="AchievementFrame" relativePoint="TOPLEFT">
+					<Anchor point="BOTTOMLEFT" relativeTo="AchievementsFrame" relativePoint="TOPLEFT">
 						<Offset x="26" y="-39"/>
 					</Anchor>
 				</Anchors>
@@ -2299,7 +2299,7 @@
 								<AbsDimension x="133" y="39"/>
 							</Size>
 							<Anchors>
-								<Anchor point="BOTTOM" relativeTo="AchievementFrameHeader" relativePoint="BOTTOM">
+								<Anchor point="BOTTOM" relativeTo="AchievementsFrameHeader" relativePoint="BOTTOM">
 									<Offset x="20" y="16"/>
 								</Anchor>
 							</Anchors>
@@ -2308,7 +2308,7 @@
 						<FontString name="$parentTitle" inherits="GameFontNormal" text="ACHIEVEMENT_TITLE">
 							<Size x="200" y="12"/>
 							<Anchors>
-								<Anchor point="TOP" relativeTo="AchievementFrameHeaderPointBorder" relativePoint="TOP">
+								<Anchor point="TOP" relativeTo="AchievementsFrameHeaderPointBorder" relativePoint="TOP">
 									<Offset x="0" y="7"/>
 								</Anchor>
 							</Anchors>
@@ -2326,7 +2326,7 @@
 						<FontString name="$parentPoints" inherits="GameFontHighlight">
 							<Size x="0" y="12"/>
 							<Anchors>
-								<Anchor point="TOP" relativeTo="AchievementFrameHeaderPointBorder" relativePoint="TOP">
+								<Anchor point="TOP" relativeTo="AchievementsFrameHeaderPointBorder" relativePoint="TOP">
 									<Offset x="0" y="-13"/>
 								</Anchor>
 							</Anchors>
@@ -2362,8 +2362,8 @@
 					<AbsDimension x="175" y="0"/>
 				</Size>
 				<Scripts>		
-					<OnLoad inherit="prepend" function="AchievementFrameCategories_OnLoad"/>
-					<OnShow function="AchievementFrameCategories_OnShow"/>
+					<OnLoad inherit="prepend" function="AchievementsFrameCategories_OnLoad"/>
+					<OnShow function="AchievementsFrameCategories_OnShow"/>
 				</Scripts>
 				
 				<Frames>
@@ -2450,13 +2450,13 @@
 					</Layer>
 				</Layers>
 				<Scripts>
-					<OnLoad function="AchievementFrameAchievements_OnLoad"/>
-					<OnEvent function="AchievementFrameAchievements_OnEvent"/>
+					<OnLoad function="AchievementsFrameAchievements_OnLoad"/>
+					<OnEvent function="AchievementsFrameAchievements_OnEvent"/>
 					<OnHide>
-						AchievementFrameFilterDropdown:Hide();
-						AchievementFrameHeaderRightDDLInset:Hide();
+						AchievementsFrameFilterDropdown:Hide();
+						AchievementsFrameHeaderRightDDLInset:Hide();
 					</OnHide>
-					<OnShow function="AchievementFrameAchievements_OnShow"/>
+					<OnShow function="AchievementsFrameAchievements_OnShow"/>
 				</Scripts>				
 				<Frames>
 					<ScrollFrame name="$parentContainer" inherits="HybridScrollFrameTemplate">
@@ -2505,8 +2505,8 @@
 					<Anchor point="BOTTOM" relativeTo="$parentCategories" relativePoint="BOTTOM"/>
 				</Anchors>
 				<Scripts>
-					<OnLoad function="AchievementFrameStats_OnLoad"/>
-					<OnEvent function="AchievementFrameStats_OnEvent"/>
+					<OnLoad function="AchievementsFrameStats_OnLoad"/>
+					<OnEvent function="AchievementsFrameStats_OnEvent"/>
 				</Scripts>
 				<Frames>
 					<Frame name="$parentBG">
@@ -2781,56 +2781,56 @@
 								<BarTexture name="$parentBar" file="Interface\PaperDollInfoFrame\UI-Character-Skills-Bar"/>
 								<BarColor r="0" g="1" b="0"/>
 							</StatusBar>							
-							<StatusBar name="$parentCategory1" inherits="AchievementFrameSummaryCategoryTemplate" id="92">	
+							<StatusBar name="$parentCategory1" inherits="AchievementsFrameSummaryCategoryTemplate" id="92">	
 								<Anchors>
 									<Anchor point="TOPLEFT" relativeTo="$parentStatusBar" relativePoint="BOTTOMLEFT">
 										<Offset x="0" y="-24"/>
 									</Anchor>
 								</Anchors>
 							</StatusBar>
-							<StatusBar name="$parentCategory2" inherits="AchievementFrameSummaryCategoryTemplate" id="96">	
+							<StatusBar name="$parentCategory2" inherits="AchievementsFrameSummaryCategoryTemplate" id="96">	
 								<Anchors>
 									<Anchor point="TOPLEFT" relativeTo="$parentCategory1" relativePoint="TOPRIGHT">
 										<Offset x="20" y="0"/>
 									</Anchor>
 								</Anchors>
 							</StatusBar>
-							<StatusBar name="$parentCategory3" inherits="AchievementFrameSummaryCategoryTemplate" id="97">	
+							<StatusBar name="$parentCategory3" inherits="AchievementsFrameSummaryCategoryTemplate" id="97">	
 								<Anchors>
 									<Anchor point="TOPLEFT" relativeTo="$parentCategory1" relativePoint="BOTTOMLEFT">
 										<Offset x="0" y="-14"/>
 									</Anchor>
 								</Anchors>							
 							</StatusBar>
-							<StatusBar name="$parentCategory4" inherits="AchievementFrameSummaryCategoryTemplate" id="95">	
+							<StatusBar name="$parentCategory4" inherits="AchievementsFrameSummaryCategoryTemplate" id="95">	
 								<Anchors>
 									<Anchor point="TOPLEFT" relativeTo="$parentCategory3" relativePoint="TOPRIGHT">
 										<Offset x="20" y="0"/>
 									</Anchor>
 								</Anchors>						
 							</StatusBar>
-							<StatusBar name="$parentCategory5" inherits="AchievementFrameSummaryCategoryTemplate" id="168">	
+							<StatusBar name="$parentCategory5" inherits="AchievementsFrameSummaryCategoryTemplate" id="168">	
 								<Anchors>
 									<Anchor point="TOPLEFT" relativeTo="$parentCategory3" relativePoint="BOTTOMLEFT">
 										<Offset x="0" y="-14"/>
 									</Anchor>
 								</Anchors>						
 							</StatusBar>
-							<StatusBar name="$parentCategory6" inherits="AchievementFrameSummaryCategoryTemplate" id="169">	
+							<StatusBar name="$parentCategory6" inherits="AchievementsFrameSummaryCategoryTemplate" id="169">	
 								<Anchors>
 									<Anchor point="TOPLEFT" relativeTo="$parentCategory5" relativePoint="TOPRIGHT">
 										<Offset x="20" y="0"/>
 									</Anchor>
 								</Anchors>
 							</StatusBar>
-							<StatusBar name="$parentCategory7" inherits="AchievementFrameSummaryCategoryTemplate" id="201">	
+							<StatusBar name="$parentCategory7" inherits="AchievementsFrameSummaryCategoryTemplate" id="201">	
 								<Anchors>
 									<Anchor point="TOPLEFT" relativeTo="$parentCategory5" relativePoint="BOTTOMLEFT">
 										<Offset x="0" y="-14"/>
 									</Anchor>
 								</Anchors>							
 							</StatusBar>
-							<StatusBar name="$parentCategory8" inherits="AchievementFrameSummaryCategoryTemplate" id="155">	
+							<StatusBar name="$parentCategory8" inherits="AchievementsFrameSummaryCategoryTemplate" id="155">	
 								<Anchors>
 									<Anchor point="TOPLEFT" relativeTo="$parentCategory7" relativePoint="TOPRIGHT">
 										<Offset x="20" y="0"/>
@@ -2844,8 +2844,8 @@
 					<OnLoad>
 						self:RegisterEvent("ACHIEVEMENT_EARNED");
 					</OnLoad>
-					<OnEvent function="AchievementFrameSummary_Update"/>
-					<OnShow function="AchievementFrameSummary_OnShow"/>
+					<OnEvent function="AchievementsFrameSummary_Update"/>
+					<OnShow function="AchievementsFrameSummary_OnShow"/>
 				</Scripts>
 			</Frame>
 			<Frame name="$parentComparison" hidden="true">
@@ -3031,7 +3031,7 @@
 						<Frames>
 							<Slider name="$parentScrollBar" inherits="HybridScrollBarTemplate">
 								<Anchors>
-									<Anchor point="TOPLEFT" relativeTo="AchievementFrameComparisonSummary" relativePoint="TOPRIGHT">
+									<Anchor point="TOPLEFT" relativeTo="AchievementsFrameComparisonSummary" relativePoint="TOPRIGHT">
 										<Offset>
 											<AbsDimension x="7" y="-16"/>
 										</Offset>
@@ -3139,27 +3139,27 @@
 					</Layer>
 				</Layers>
 				<Scripts>
-					<OnLoad function="AchievementFrameComparison_OnLoad"/>
-					<OnEvent function="AchievementFrameComparison_OnEvent"/>
-					<OnShow function="AchievementFrameComparison_OnShow"/>
-					<OnHide function="AchievementFrameComparison_OnHide"/>
+					<OnLoad function="AchievementsFrameComparison_OnLoad"/>
+					<OnEvent function="AchievementsFrameComparison_OnEvent"/>
+					<OnShow function="AchievementsFrameComparison_OnShow"/>
+					<OnHide function="AchievementsFrameComparison_OnHide"/>
 				</Scripts>
 			</Frame>			
 			<Button name="$parentCloseButton" inherits="UIPanelCloseButton">
 				<Anchors>
-					<Anchor point="TOPRIGHT" relativeTo="AchievementFrame" relativePoint="TOPRIGHT">
+					<Anchor point="TOPRIGHT" relativeTo="AchievementsFrame" relativePoint="TOPRIGHT">
 						<Offset x="3" y="4"/>
 					</Anchor>
 				</Anchors>
 				<Scripts>
 					<OnShow>
-						if ( AchievementFrameComparisonHeader:IsShown() ) then
-							self:SetFrameLevel(AchievementFrameComparisonHeader:GetFrameLevel() + 1);
+						if ( AchievementsFrameComparisonHeader:IsShown() ) then
+							self:SetFrameLevel(AchievementsFrameComparisonHeader:GetFrameLevel() + 1);
 						end
 					</OnShow>
 				</Scripts>
 			</Button>
-			<Button name="$parentTab1" inherits="AchievementFrameTabButtonTemplate" id="1" text="ACHIEVEMENTS">
+			<Button name="$parentTab1" inherits="AchievementsFrameTabButtonTemplate" id="1" text="ACHIEVEMENTS">
 				<Anchors>
 					<Anchor point="BOTTOMLEFT">
 						<Offset>
@@ -3169,14 +3169,14 @@
 				</Anchors>
 				<Scripts>
 					<OnClick>
-						AchievementFrameTab_OnClick(self:GetID());
+						AchievementsFrameTab_OnClick(self:GetID());
 						self.text:SetPoint("CENTER", self, "CENTER", 0, -5);
-						AchievementFrameTab2.text:SetPoint("CENTER", AchievementFrameTab2, "CENTER", 0, -3);
+						AchievementsFrameTab2.text:SetPoint("CENTER", AchievementsFrameTab2, "CENTER", 0, -3);
 						PlaySound(SOUNDKIT.IG_CHARACTER_INFO_TAB);
 					</OnClick>
 				</Scripts>
 			</Button>
-			<Button name="$parentTab2" inherits="AchievementFrameTabButtonTemplate" id="2" text="STATISTICS">
+			<Button name="$parentTab2" inherits="AchievementsFrameTabButtonTemplate" id="2" text="STATISTICS">
 				<Anchors>
 					<Anchor point="LEFT" relativeTo="$parentTab1" relativePoint="RIGHT">
 						<Offset>
@@ -3186,14 +3186,14 @@
 				</Anchors>
 				<Scripts>
 					<OnClick>
-						AchievementFrameTab_OnClick(self:GetID());
+						AchievementsFrameTab_OnClick(self:GetID());
 						self.text:SetPoint("CENTER", self, "CENTER", 0, -5);
-						AchievementFrameTab1.text:SetPoint("CENTER", AchievementFrameTab1, "CENTER", 0, -3);
+						AchievementsFrameTab1.text:SetPoint("CENTER", AchievementsFrameTab1, "CENTER", 0, -3);
 						PlaySound(SOUNDKIT.IG_CHARACTER_INFO_TAB);
 					</OnClick>
 				</Scripts>				
 			</Button>
-			<DropdownButton name="AchievementFrameFilterDropdown" inherits="WowStyle1FilterDropdownTemplate" hidden="true">
+			<DropdownButton name="AchievementsFrameFilterDropdown" inherits="WowStyle1FilterDropdownTemplate" hidden="true">
 				<Anchors>
 					<Anchor point="TOPRIGHT" x="-98" y="10"/>
 				</Anchors>

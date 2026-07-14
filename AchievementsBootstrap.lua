@@ -116,13 +116,25 @@ end
 
 eventFrame:SetScript("OnEvent", function(_, event, arg1, arg2, arg3, arg4, arg5)
 	if event == "ADDON_LOADED" then
-		if arg1 == "Achievements" or arg1 == "Blizzard_AchievementUI" then
+		if arg1 == "Achievements" then
 			Achievements.applyAchievementShieldTexturePatch();
 			Achievements.applyAchievementPlusMinusTexturePatch();
 			Achievements.applyAchievementCategoryListPatch();
 			Achievements.applyAchievementStatsUIPatch();
 			Achievements.applyAchievementSummaryUIPatch();
 			Achievements.applyAchievementComparisonUIPatch();
+		elseif arg1 == "Blizzard_AchievementUI" then
+			-- This addon bundles its own copy of the achievement UI and never
+			-- loads the native load-on-demand Blizzard_AchievementUI. If another
+			-- addon force-loads it, its globals overwrite our bundled UI and
+			-- break the achievement frame, so warn loudly.
+			local message = "|cffff2020Achievements:|r another addon loaded Blizzard_AchievementUI. This conflicts with the achievement UI bundled by the Achievements addon and will cause errors or a broken achievement window.";
+			local private = Achievements.private;
+			if private and private.PrintMessage then
+				private.PrintMessage(message);
+			elseif DEFAULT_CHAT_FRAME then
+				DEFAULT_CHAT_FRAME:AddMessage(message);
+			end
 		end
 		return;
 	end
@@ -339,10 +351,28 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1, arg2, arg3, arg4, arg5)
 		return;
 	end
 
+	if event == "ZONE_CHANGED_NEW_AREA" then
+		-- Explored overlays are permanent. Keeping the existing cache avoids a
+		-- full all-map overlay rebuild on every loading screen/zone transition;
+		-- MAP_EXPLORATION_UPDATED incrementally merges newly revealed overlays.
+		-- World-state scans are only useful in battleground/arena contexts and
+		-- can be expensive on clients that expose many area POIs.
+		if (not Achievements.HasActiveWorldStateContext) or Achievements.HasActiveWorldStateContext() then
+			if Achievements.RecordWorldStateScan then
+				Achievements.RecordWorldStateScan();
+			end
+		end
+		ScheduleCriteriaRefresh(false, 0.35, event);
+		return;
+	end
+
 	if Achievements.ClearQuestCompletionCache then
 		Achievements.ClearQuestCompletionCache();
 	end
-	if Achievements.ClearExplorationCache then
+	-- The full exploration cache is expensive to build and explored overlays
+	-- never become unexplored. Only reset it for initial world-state backfill;
+	-- MAP_EXPLORATION_UPDATED maintains it incrementally after that.
+	if event == "PLAYER_ENTERING_WORLD" and Achievements.ClearExplorationCache then
 		Achievements.ClearExplorationCache();
 	end
 	if Achievements.ClearCharacterScanCache then
@@ -435,11 +465,6 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1, arg2, arg3, arg4, arg5)
 		if Achievements.MarkGuildAnnouncementsReady then
 			C_Timer.After(15, Achievements.MarkGuildAnnouncementsReady);
 		end
-	elseif event == "ZONE_CHANGED_NEW_AREA" then
-		if Achievements.RecordWorldStateScan then
-			Achievements.RecordWorldStateScan();
-		end
-		Achievements.RefreshCriteriaAchievements(false);
 	elseif event == "UPDATE_BATTLEFIELD_STATUS" then
 		if Achievements.RecordWorldStateScan then
 			Achievements.RecordWorldStateScan();
