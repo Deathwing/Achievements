@@ -1210,6 +1210,15 @@ function Achievements.AchievementMicroButton_Update()
 		return;
 	end
 
+	-- On clients with a native achievement micro button (TBC), the secure
+	-- UpdateMicroButtons() disables the button when the NATIVE achievement list
+	-- is empty (native HasCompletedAnyAchievement()/CanShowAchievementUI() are
+	-- authoritative there since 1.0.6), leaving it faded at 0.5 alpha and
+	-- unclickable. The addon supplies its own achievements, so re-enable it.
+	if button.IsEnabled and button.Enable and not button:IsEnabled() then
+		button:Enable();
+	end
+
 	LayoutLegacyAchievementMicroButton(button);
 
 	if AchievementsFrame and AchievementsFrame:IsShown() then

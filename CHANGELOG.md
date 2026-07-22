@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.7 - 2026-07-22
+
+- Added an in-game update notification and `/ach update` source chooser with official GitHub, CurseForge, and Wago download links. The new `/ach` (or `/achievements`) command without arguments toggles the achievement frame.
+- Release tags now produce installable GitHub assets and publish the bundled addon to Wago while retaining split dependency packages on CurseForge.
+- Fixed the achievement micro button appearing faded (half transparent) and unclickable on The Burning Crusade. Blizzard's micro-button update disables the native achievement button when the built-in achievement system reports no achievements, which is always the case there; the addon now re-enables the button after every micro-button update since it provides its own achievements.
+
 ## 1.0.6 - 2026-07-16
 
 - Fixed a "blocked action" (`ADDON_ACTION_FORBIDDEN`) error that prevented logging out or exiting from the game menu on The Burning Crusade. The addon defined globals such as `HasCompletedAnyAchievement` that already exist natively on that client; overwriting them tainted Blizzard's protected code that reads them while opening the game menu, which then blocked the Log Out and Exit buttons. These globals are now only defined when the client does not already provide them.

@@ -249,6 +249,10 @@ local function NotifyNewerVersion(sender, remoteVersion)
 	if CompareVersions(remoteVersion, localVersion) <= 0 then
 		return;
 	end
+	if Achievements.Update and Achievements.Update.Notify then
+		Achievements.Update.Notify(remoteVersion);
+		return;
+	end
 	local warningKey = tostring(remoteVersion);
 	if warnedVersions[warningKey] then
 		return;

@@ -38,31 +38,31 @@ The bundled release zip includes both folders. A standalone `Achievements` zip e
 
 **Achievement Summary**
 
-![Achievement summary frame](Gallery/Achievements.png)
+![Achievement summary frame](https://raw.githubusercontent.com/Deathwing/Achievements/main/Gallery/Achievements.png)
 
 **Statistics**
 
-![Statistics frame](Gallery/Statistics.png)
+![Statistics frame](https://raw.githubusercontent.com/Deathwing/Achievements/main/Gallery/Statistics.png)
 
 **Achievement Earned Toast**
 
-![Achievement earned toast](Gallery/AchievementEarned.png)
+![Achievement earned toast](https://raw.githubusercontent.com/Deathwing/Achievements/main/Gallery/AchievementEarned.png)
 
 **Chat Announcement**
 
-![Achievement chat announcement](Gallery/AchievementChat.png)
+![Achievement chat announcement](https://raw.githubusercontent.com/Deathwing/Achievements/main/Gallery/AchievementChat.png)
 
 **Clickable Achievement Link**
 
-![Clickable achievement link tooltip](Gallery/AchievementLinkClicked.png)
+![Clickable achievement link tooltip](https://raw.githubusercontent.com/Deathwing/Achievements/main/Gallery/AchievementLinkClicked.png)
 
 **Tracked Objectives**
 
-![Tracked achievement objectives](Gallery/ObjectiveTracker.png)
+![Tracked achievement objectives](https://raw.githubusercontent.com/Deathwing/Achievements/main/Gallery/ObjectiveTracker.png)
 
 **Title Selection**
 
-![Character frame title selection](Gallery/TItleSelection.png)
+![Character frame title selection](https://raw.githubusercontent.com/Deathwing/Achievements/main/Gallery/TItleSelection.png)
 
 ## Features
 

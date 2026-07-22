@@ -3,7 +3,11 @@
 ## Notes: Blizzard Achievement UI compatibility layer for Classic Era and The Burning Crusade.
 ## IconTexture: Interface\AddOns\Achievements\Media\logo.png
 ## Author: Deathwing
-## Version: 1.0.6
+## Version: 1.0.7
+## X-Website: https://github.com/Deathwing/Achievements
+## X-Repository: https://github.com/Deathwing/Achievements
+## X-Curse-Project-ID: 1535715
+## X-Wago-ID: EGPenjN1
 ## X-License: GNU GPL3
 ## X-Category: Achievements
 # ACHIEVEMENTS_UNCOMMENT_NEXT_LINE
@@ -24,6 +28,7 @@ AchievementsMicroButton.lua
 AchievementsChatLinks.lua
 AchievementsGuildBroadcast.lua
 AchievementsTitles.lua
+AchievementsUpdate.lua
 AchievementsNetwork.lua
 AchievementsCompare.lua
 AchievementsFetcher.lua
