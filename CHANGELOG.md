@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.8 - 2026-07-23
+
+- Updated Classic Era interface compatibility to `11509` (1.15.9).
+
 ## 1.0.7 - 2026-07-22
 
 - Added an in-game update notification and `/ach update` source chooser with official GitHub, CurseForge, and Wago download links. The new `/ach` (or `/achievements`) command without arguments toggles the achievement frame.

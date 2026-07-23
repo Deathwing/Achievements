@@ -1,15 +1,26 @@
-## Interface: 20506, 11508
+## Interface: 20506, 11509
 ## Title: Achievements
 ## Notes: Blizzard Achievement UI compatibility layer for Classic Era and The Burning Crusade.
 ## IconTexture: Interface\AddOns\Achievements\Media\logo.png
 ## Author: Deathwing
-## Version: 1.0.7
+## Version: 1.0.8
 ## X-Website: https://github.com/Deathwing/Achievements
 ## X-Repository: https://github.com/Deathwing/Achievements
 ## X-Curse-Project-ID: 1535715
 ## X-Wago-ID: EGPenjN1
 ## X-License: GNU GPL3
 ## X-Category: Achievements
+## Category-enUS: Collections
+## Category-deDE: Kriegsmeutesammlungen
+## Category-esES: Colecciones de banda guerrera
+## Category-esMX: Colecciones de tropa
+## Category-frFR: Collections du bataillon
+## Category-itIT: Collezioni della Brigata
+## Category-koKR: 수집
+## Category-ptBR: Coleções do Bando de Guerra
+## Category-ruRU: Коллекции отряда
+## Category-zhCN: 战团藏品
+## Category-zhTW: 戰隊收藏
 # ACHIEVEMENTS_UNCOMMENT_NEXT_LINE
 # ## Dependencies: AchievementsData
 ## SavedVariables: AchievementsDB
