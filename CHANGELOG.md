@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.0.9 - 2026-07-24
+
+- The update-available popup now only appears while you are resting (in an inn or city) instead of anywhere out of combat, so it no longer interrupts you in the open world.
+- Added a `/ach versions` command that prints the versions of Achievements and its bundled components (the data package, if installed), and notes when a newer version has been seen from other players.
+
 ## 1.0.8 - 2026-07-23
 
 - Updated Classic Era interface compatibility to `11509` (1.15.9).

@@ -145,8 +145,14 @@ TryShowPendingUpdate = function()
 	if InCombatLockdown() then
 		return;
 	end
+	-- Only surface the update popup in rested areas (inns/cities). Popping it up
+	-- mid-world is too intrusive, so defer and retry until the player is resting.
+	if not IsResting() then
+		ScheduleRetry(5);
+		return;
+	end
 	-- Parity with Deathlog/MRP: they also defer while their changelog popup
-	-- is open. Achievements has no changelog popup, so only combat defers.
+	-- is open. Achievements has no changelog popup, so only combat/resting defer.
 	local version = pendingVersion;
 	pendingVersion = nil;
 	AchievementsDB.lastUpdatePopupVersion = version;
@@ -177,6 +183,39 @@ function Update.Notify(newVersion)
 	Print("|cffffff00Achievements:|r A newer version (v" .. newVersion .. ") is available; you are running v" .. GetVersion() .. ". Type |cffffffff/ach update|r for official GitHub, CurseForge, and Wago downloads.");
 end
 
+--- Print the versions of Achievements and its bundled sub-addons to chat,
+--- noting if a newer version has been detected from other players.
+function Update.PrintVersions()
+	Print("|cffffd200Achievements versions|r");
+
+	local mainVersion = GetVersion();
+	Print("  Achievements: |cffffffff" .. mainVersion .. "|r");
+
+	-- Optional data companion. GetAddOnMetadata reads the on-disk TOC, so it
+	-- returns a version even when AchievementsData is installed but DISABLED
+	-- (unchecked) — misleading because a disabled companion contributes nothing
+	-- at runtime. Report the loaded state: skip when not installed, mark it
+	-- (disabled) when installed but not loaded.
+	local dataOk, dataVersion = pcall(C_AddOns.GetAddOnMetadata, "AchievementsData", "Version");
+	if dataOk and dataVersion then
+		local isLoaded = C_AddOns and C_AddOns.IsAddOnLoaded or IsAddOnLoaded;
+		if isLoaded and isLoaded("AchievementsData") then
+			Print("  AchievementsData: |cffffffff" .. tostring(dataVersion) .. "|r");
+		else
+			Print("  AchievementsData: |cffffffff" .. tostring(dataVersion) .. "|r |cff999999(installed, disabled)|r");
+		end
+	end
+
+	-- Note a known newer version, if one has been detected from other players.
+	local detected = AchievementsDB and AchievementsDB.newestDetectedUpdateVersion;
+	if detected and CompareVersions(detected, mainVersion) > 0 then
+		Print("|cffff5555Update available:|r Achievements v" .. tostring(detected)
+			.. " has been seen from other players. Type |cffffffff/ach update|r for download sources.");
+	else
+		Print("|cff55ff55You're up to date|r as far as Achievements can tell.");
+	end
+end
+
 SLASH_ACHIEVEMENTSUPDATES1 = "/ach-update";
 SLASH_ACHIEVEMENTSUPDATES2 = "/achievements-update";
 SlashCmdList["ACHIEVEMENTSUPDATES"] = function()
@@ -191,6 +230,9 @@ SlashCmdList["ACHIEVEMENTS"] = function(msg)
 	local command = tostring(msg or ""):lower():match("^%s*(%S*)") or "";
 	if command == "update" or command == "updates" then
 		Update.Show();
+		return;
+	elseif command == "version" or command == "versions" then
+		Update.PrintVersions();
 		return;
 	end
 	Achievements.ToggleAchievementFrame();
