@@ -8,6 +8,7 @@
 ## X-Repository: https://github.com/Deathwing/Achievements
 ## X-Curse-Project-ID: 1535715
 ## X-Wago-ID: EGPenjN1
+## X-WoWI-ID: 27169
 ## X-License: GNU GPL3
 ## X-Category: Achievements
 ## Category-enUS: Collections
