@@ -52,14 +52,85 @@ local LOCALIZED_DATA_TABLES = {
 	questSorts = true,
 };
 
+local availableDisplayLocaleByLower = {
+	enus = "enUS",
+};
+if type(ACHIEVEMENTS_DATA.localizations) == "table" then
+	for locale, localeData in pairs(ACHIEVEMENTS_DATA.localizations) do
+		if type(locale) == "string" and type(localeData) == "table" then
+			local lowerLocale = string.lower(locale);
+			if lowerLocale ~= "enus" and lowerLocale ~= "auto" then
+				availableDisplayLocaleByLower[lowerLocale] = locale;
+			end
+		end
+	end
+end
+
+local availableDisplayLocales = {};
+for _, locale in pairs(availableDisplayLocaleByLower) do
+	availableDisplayLocales[#availableDisplayLocales + 1] = locale;
+end
+table.sort(availableDisplayLocales);
+
+local function NormalizeDisplayLocale(locale)
+	if type(locale) ~= "string" then
+		return nil;
+	end
+	local lowerLocale = string.lower(locale);
+	if lowerLocale == "auto" then
+		return "auto";
+	end
+	return availableDisplayLocaleByLower[lowerLocale];
+end
+
+local savedDisplayLocale = AchievementsDB.displayLocale;
+local selectedDisplayLocale = NormalizeDisplayLocale(savedDisplayLocale) or "auto";
+if savedDisplayLocale ~= nil then
+	AchievementsDB.displayLocale = selectedDisplayLocale;
+end
+
+local requestedDisplayLocale = selectedDisplayLocale == "auto" and GetLocale() or selectedDisplayLocale;
+local effectiveDisplayLocale = NormalizeDisplayLocale(requestedDisplayLocale);
+if effectiveDisplayLocale == "auto" or not effectiveDisplayLocale then
+	effectiveDisplayLocale = "enUS";
+end
+
+function Achievements.GetDisplayLocale()
+	return selectedDisplayLocale, effectiveDisplayLocale;
+end
+
+function Achievements.GetAvailableDisplayLocales()
+	local locales = {};
+	for index, locale in ipairs(availableDisplayLocales) do
+		locales[index] = locale;
+	end
+	return locales;
+end
+
+function Achievements.SetDisplayLocale(locale)
+	local normalizedLocale = NormalizeDisplayLocale(locale);
+	if not normalizedLocale then
+		return nil, false;
+	end
+	if normalizedLocale == selectedDisplayLocale then
+		return normalizedLocale, false;
+	end
+	AchievementsDB.displayLocale = normalizedLocale;
+	selectedDisplayLocale = normalizedLocale;
+	return normalizedLocale, true;
+end
+
 local function ApplyGeneratedLocalizations()
 	local localizations = ACHIEVEMENTS_DATA.localizations;
 	if type(localizations) ~= "table" then
 		return;
 	end
 
-	local locale = GetLocale();
-	local localeData = locale and localizations[locale];
+	if effectiveDisplayLocale == "enUS" then
+		return;
+	end
+
+	local localeData = localizations[effectiveDisplayLocale];
 	if type(localeData) ~= "table" then
 		return;
 	end

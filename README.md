@@ -82,6 +82,9 @@ The bundled release zip includes both folders. A standalone `Achievements` zip e
 
 | Command | Description |
 | --- | --- |
+| `/ach locale` | Show the selected and effective achievement-data locale and list the available locale codes. |
+| `/ach locale <code>` | Display generated achievement content in any locale available from the installed `AchievementsData` package, then reload the interface. |
+| `/ach locale auto` | Return to the WoW client locale and reload the interface if the selection changes. |
 | `/ach-compare <name>` | Compare achievements and statistics with another player running the addon. |
 | `/ach-fetch` or `/ach-fetch channel` | Request achievement snapshots from addon users in the hidden achievements channel. |
 | `/ach-fetch player <name>` | Request a snapshot from one player. |
@@ -101,7 +104,9 @@ The companion `AchievementsData` addon is generated from 3.4.5.63697 data and fi
 - The Burning Crusade: 643 achievements and 254 statistics.
 - Included localizations: `deDE`, `esES`, `esMX`, `frFR`, `koKR`, `ptBR`, `ruRU`, `zhCN`, and `zhTW`.
 
-Runtime localization overlays are applied from `AchievementsData` based on your game client locale.
+Runtime localization overlays are applied from `AchievementsData` based on your game client locale. Use `/ach locale <code>` to override that choice with any locale available in the installed data package, or `/ach locale auto` to restore automatic selection. The account-wide selection applies to every character and persists across sessions. A successful selection change reloads the interface. If the selected client locale has no available overlay, the generated English (`enUS`) base data is used.
+
+The override only affects generated achievement content, such as achievement names, descriptions, criteria, categories, and rewards. Blizzard-owned window labels, tabs, buttons, tooltips, and date formats remain in the WoW client language. Missing fields in a partial localization continue to use the English base data.
 
 ## Notes and Limitations
 
