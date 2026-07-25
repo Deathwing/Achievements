@@ -10,6 +10,7 @@ local SOURCES = {
 	{ name = "GitHub", url = "https://github.com/Deathwing/Achievements/releases/latest" },
 	{ name = "CurseForge", url = "https://www.curseforge.com/wow/addons/achievements-addon" },
 	{ name = "Wago", url = "https://addons.wago.io/addons/achievements" },
+	{ name = "WoWInterface", url = "https://www.wowinterface.com/downloads/info27169-Achievements.html" },
 };
 
 local warnedVersions = {};
