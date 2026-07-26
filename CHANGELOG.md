@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Added `/ach locale <code>` to display generated achievement content in any localization available from the installed `AchievementsData` package. `/ach locale auto` restores the WoW client locale, and successful changes reload the interface automatically. Blizzard-owned window labels remain in the client language.
+
 ## 1.0.9 - 2026-07-24
 
 - The update-available popup now only appears while you are resting (in an inn or city) instead of anywhere out of combat, so it no longer interrupts you in the open world.

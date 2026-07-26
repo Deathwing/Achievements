@@ -223,17 +223,54 @@ SlashCmdList["ACHIEVEMENTSUPDATES"] = function()
 	Update.Show();
 end
 
+local function GetAvailableDisplayLocaleText()
+	local locales = Achievements.GetAvailableDisplayLocales();
+	table.insert(locales, 1, "auto");
+	return table.concat(locales, ", ");
+end
+
+local function PrintDisplayLocaleStatus()
+	local selectedLocale, effectiveLocale = Achievements.GetDisplayLocale();
+	Print("|cffffd200Achievements display locale:|r selected: " .. selectedLocale .. "; effective: " .. effectiveLocale .. ".");
+	Print("Available display locales: " .. GetAvailableDisplayLocaleText() .. ".");
+end
+
+local function HandleDisplayLocaleCommand(argument)
+	if argument == "" then
+		PrintDisplayLocaleStatus();
+		return;
+	end
+
+	local canonicalLocale, changed = Achievements.SetDisplayLocale(argument);
+	if not canonicalLocale then
+		Print("|cffff2020Achievements:|r Unknown display locale '" .. tostring(argument) .. "'.");
+		Print("Available display locales: " .. GetAvailableDisplayLocaleText() .. ".");
+		return;
+	end
+	if not changed then
+		Print("|cffffd200Achievements:|r display locale " .. canonicalLocale .. " is already selected.");
+		return;
+	end
+
+	Print("|cffffd200Achievements:|r display locale set to " .. canonicalLocale .. ". Reloading interface.");
+	ReloadUI();
+end
+
 -- Main slash command, mirroring Deathlog (/dl update) and MRP (/mrp update).
 -- Without a subcommand it toggles the achievement frame.
 SLASH_ACHIEVEMENTS1 = "/ach";
 SLASH_ACHIEVEMENTS2 = "/achievements";
 SlashCmdList["ACHIEVEMENTS"] = function(msg)
-	local command = tostring(msg or ""):lower():match("^%s*(%S*)") or "";
+	local command, argument = tostring(msg or ""):match("^%s*(%S*)%s*(.-)%s*$");
+	command = string.lower(command or "");
 	if command == "update" or command == "updates" then
 		Update.Show();
 		return;
 	elseif command == "version" or command == "versions" then
 		Update.PrintVersions();
+		return;
+	elseif command == "locale" then
+		HandleDisplayLocaleCommand(argument);
 		return;
 	end
 	Achievements.ToggleAchievementFrame();
