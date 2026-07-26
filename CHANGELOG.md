@@ -1,8 +1,8 @@
 # Changelog
 
-## Unreleased
+## 1.1.0 - 2026-07-26
 
-- Added `/ach locale <code>` to display generated achievement content in any localization available from the installed `AchievementsData` package. `/ach locale auto` restores the WoW client locale, and successful changes reload the interface automatically. Blizzard-owned window labels remain in the client language.
+- Added `/ach locale <code>` to show achievement names, descriptions, criteria, categories and rewards in any language included in the `AchievementsData` package, independently of your game client language. `/ach locale` on its own shows the current selection and the available language codes, and `/ach locale auto` returns to the client language. The choice is account-wide and applies to every character. Blizzard-owned window labels, tabs, buttons and date formats stay in the client language, and achievement tracking is unaffected by the selection. Thanks to @Yudaev for contributing this feature.
 
 ## 1.0.9 - 2026-07-24
 

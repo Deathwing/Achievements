@@ -782,6 +782,22 @@ function Resolvers.IsEnglishClientLocale()
 	return locale == "enUS" or locale == "enGB";
 end
 
+-- Generated names/descriptions are overlaid with the player's display locale,
+-- which can differ from the client locale. Text that gets matched against live
+-- client API strings must always be read in the client locale.
+function Resolvers.GetClientLocaleText(tableName, recordID, fieldName)
+	if Achievements.GetClientLocaleText then
+		return Achievements.GetClientLocaleText(tableName, recordID, fieldName);
+	end
+	local targetTable = data[tableName];
+	local record = type(targetTable) == "table" and targetTable[recordID] or nil;
+	local value = type(record) == "table" and record[fieldName] or nil;
+	if type(value) == "string" and value ~= "" then
+		return value;
+	end
+	return nil;
+end
+
 function Resolvers.AddTextToken(tokens, value)
 	if type(tokens) ~= "table" or type(value) ~= "string" or value == "" then
 		return;
@@ -799,12 +815,10 @@ function Resolvers.GetFactionTextTokens()
 	Resolvers.AddTextToken(tokens.Horde, rawget and rawget(_G, "FACTION_HORDE") or nil);
 	Resolvers.AddTextToken(tokens.Horde, rawget and rawget(_G, "HORDE") or nil);
 	for _, factionID in ipairs({ 469, 730, 890 }) do
-		local faction = FACTION_DATA[factionID];
-		Resolvers.AddTextToken(tokens.Alliance, faction and faction.name);
+		Resolvers.AddTextToken(tokens.Alliance, Resolvers.GetClientLocaleText("factions", factionID, "name"));
 	end
 	for _, factionID in ipairs({ 67, 729, 889 }) do
-		local faction = FACTION_DATA[factionID];
-		Resolvers.AddTextToken(tokens.Horde, faction and faction.name);
+		Resolvers.AddTextToken(tokens.Horde, Resolvers.GetClientLocaleText("factions", factionID, "name"));
 	end
 	Resolvers.factionTextTokens = tokens;
 	return tokens;
@@ -1083,9 +1097,10 @@ end
 
 local function BuildSkillLineCache()
 	local byName = {};
-	for skillLineID, skillLine in pairs(skillLines) do
-		if skillLine.name and skillLine.name ~= "" then
-			byName[string.lower(skillLine.name)] = skillLineID;
+	for skillLineID in pairs(skillLines) do
+		local skillLineName = Resolvers.GetClientLocaleText("skillLines", skillLineID, "name");
+		if skillLineName then
+			byName[string.lower(skillLineName)] = skillLineID;
 		end
 	end
 
@@ -2540,9 +2555,9 @@ function Resolvers.GetWorldStateZoneNameLookup()
 	end
 	local lookup = {};
 	for instanceMapID, uiMapID in pairs(Resolvers.worldStateInstanceToUiMapID or {}) do
-		local uiMap = UI_MAP_DATA[uiMapID];
-		if uiMap and uiMap.name then
-			lookup[Resolvers.LocaleLower(uiMap.name)] = instanceMapID;
+		local uiMapName = Resolvers.GetClientLocaleText("uiMaps", uiMapID, "name");
+		if uiMapName then
+			lookup[Resolvers.LocaleLower(uiMapName)] = instanceMapID;
 		end
 	end
 	if Resolvers.IsEnglishClientLocale() then
@@ -3901,9 +3916,9 @@ end
 
 local function BuildSoulOfIronAuraNameLookup()
 	local fallbackNames = { "Soul of Iron" };
-	local tree = CRITERIA_TREE_DATA[138593];
-	if tree and type(tree.description) == "string" and tree.description ~= "" then
-		tinsert(fallbackNames, tree.description);
+	local description = Resolvers.GetClientLocaleText("criteriaTrees", 138593, "description");
+	if description then
+		tinsert(fallbackNames, description);
 	end
 	return BuildAuraNameLookup(SOUL_OF_IRON_AURA_SPELL_IDS, fallbackNames);
 end
@@ -4579,10 +4594,10 @@ function Resolvers.GetCriteriaAssetsByDescription(criteriaType)
 	end
 
 	local byDescription = {};
-	for _, criteriaTree in pairs(CRITERIA_TREE_DATA) do
+	for criteriaTreeID, criteriaTree in pairs(CRITERIA_TREE_DATA) do
 		local criteria = criteriaTree.criteriaID and CRITERIA_DATA[criteriaTree.criteriaID] or nil;
 		if criteria and Resolvers.IsClientRecordableCriteria(criteria) and criteria.type == criteriaType and criteria.asset and criteria.asset ~= 0 then
-			local key = Resolvers.NormalizeCriteriaText(criteriaTree.description);
+			local key = Resolvers.NormalizeCriteriaText(Resolvers.GetClientLocaleText("criteriaTrees", criteriaTreeID, "description"));
 			if key then
 				byDescription[key] = byDescription[key] or {};
 				byDescription[key][criteria.asset] = true;
@@ -7485,11 +7500,11 @@ function Resolvers.GetEmoteTargetCriteriaByName()
 	end
 
 	local cache = {};
-	for _, criteriaTree in pairs(CRITERIA_TREE_DATA) do
+	for criteriaTreeID, criteriaTree in pairs(CRITERIA_TREE_DATA) do
 		local criteria = criteriaTree.criteriaID and CRITERIA_DATA[criteriaTree.criteriaID] or nil;
 		if criteria and Resolvers.IsClientRecordableCriteria(criteria) and criteria.type == CRITERIA_TYPE.EMOTE and criteria.asset and criteria.asset ~= 0 and Resolvers.GetSingleTargetCreatureModifierAsset(criteria.modifierTree) then
 			local emote = emotes[criteria.asset];
-			local targetName = Resolvers.NormalizeCriteriaText(criteriaTree.description);
+			local targetName = Resolvers.NormalizeCriteriaText(Resolvers.GetClientLocaleText("criteriaTrees", criteriaTreeID, "description"));
 			if emote and emote.name and emote.name ~= "" and targetName then
 				local emoteName = string.upper(emote.name);
 				cache[emoteName] = cache[emoteName] or {};

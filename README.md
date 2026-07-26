@@ -108,6 +108,8 @@ Runtime localization overlays are applied from `AchievementsData` based on your 
 
 The override only affects generated achievement content, such as achievement names, descriptions, criteria, categories, and rewards. Blizzard-owned window labels, tabs, buttons, tooltips, and date formats remain in the WoW client language. Missing fields in a partial localization continue to use the English base data.
 
+Achievement tracking is unaffected by the override. Where the addon has to match generated text against text the game client produces, such as skill and profession names, battleground zone and faction names, readable-object titles, targeted emote names, and incoming achievement chat links, it always matches against the client-language text.
+
 ## Notes and Limitations
 
 - This addon is a local Classic achievement system. It is not Blizzard's account-wide Retail achievement service.

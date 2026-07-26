@@ -233,6 +233,18 @@ local function PrintDisplayLocaleStatus()
 	local selectedLocale, effectiveLocale = Achievements.GetDisplayLocale();
 	Print("|cffffd200Achievements display locale:|r selected: " .. selectedLocale .. "; effective: " .. effectiveLocale .. ".");
 	Print("Available display locales: " .. GetAvailableDisplayLocaleText() .. ".");
+	if Achievements.IsDisplayLocaleOverridingClientLocale and Achievements.IsDisplayLocaleOverridingClientLocale() then
+		Print("Achievement content is shown in " .. effectiveLocale .. " while the game client runs in " .. GetLocale() .. ". Blizzard-owned labels stay in the client language.");
+	end
+end
+
+local function PrintDroppedDisplayLocaleWarning()
+	local droppedLocale = Achievements.GetDroppedDisplayLocale and Achievements.GetDroppedDisplayLocale();
+	if not droppedLocale then
+		return;
+	end
+	Print("|cffff2020Achievements:|r display locale '" .. droppedLocale .. "' is not available in the installed AchievementsData package; falling back to auto.");
+	Print("Available display locales: " .. GetAvailableDisplayLocaleText() .. ".");
 end
 
 local function HandleDisplayLocaleCommand(argument)
@@ -281,6 +293,7 @@ eventFrame:RegisterEvent("PLAYER_LOGIN");
 eventFrame:RegisterEvent("PLAYER_REGEN_ENABLED");
 eventFrame:SetScript("OnEvent", function(_, event)
 	if event == "PLAYER_LOGIN" then
+		PrintDroppedDisplayLocaleWarning();
 		local detectedVersion = AchievementsDB.newestDetectedUpdateVersion;
 		if detectedVersion and CompareVersions(detectedVersion, GetVersion()) > 0 then
 			ScheduleUpdatePopup(detectedVersion);

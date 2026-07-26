@@ -360,8 +360,11 @@ local function GetAchievementNameToIdMap()
 		return nil;
 	end
 	achievementNameToIdCache = {};
+	local getClientLocaleText = Achievements.GetClientLocaleText;
 	for id, achievement in pairs(data) do
-		local name = achievement and achievement.name;
+		-- Senders write the name in their own client locale, so match against the
+		-- client-locale name rather than an overridden display-locale name.
+		local name = getClientLocaleText and getClientLocaleText("achievements", id, "name") or (achievement and achievement.name);
 		if type(name) == "string" and name ~= "" and not achievementNameToIdCache[name] then
 			achievementNameToIdCache[name] = id;
 		end

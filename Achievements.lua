@@ -37,6 +37,10 @@ for _, key in ipairs({ "categoryOrder", "statisticsCategoryOrder", "categories",
 	end
 end
 
+-- Scoped so these locals do not consume chunk-level local slots (Lua 5.1 caps
+-- a function at 200 active locals and this file is close to the limit).
+do
+
 local LOCALIZED_DATA_TABLES = {
 	achievements = true,
 	categories = true,
@@ -83,19 +87,27 @@ local function NormalizeDisplayLocale(locale)
 	return availableDisplayLocaleByLower[lowerLocale];
 end
 
-local savedDisplayLocale = AchievementsDB.displayLocale;
-local selectedDisplayLocale = NormalizeDisplayLocale(savedDisplayLocale) or "auto";
-if savedDisplayLocale ~= nil then
-	AchievementsDB.displayLocale = selectedDisplayLocale;
-end
+-- The display locale must be resolved from saved variables, which are NOT
+-- reliably populated while this file's chunk runs: WoW executes the addon's Lua
+-- files first and only then loads the SavedVariables file, which assigns
+-- AchievementsDB wholesale and replaces the table created above. Reading
+-- AchievementsDB.displayLocale here would therefore always see nil and fall
+-- back to "auto". Resolution is deferred to ADDON_LOADED instead, which is the
+-- first point where saved variables are guaranteed to be available.
+local ResolveDisplayLocale;
+local selectedDisplayLocale = "auto";
+local effectiveDisplayLocale = "enUS";
+local clientEffectiveLocale = "enUS";
+local displayLocaleDiffersFromClient = false;
+local droppedDisplayLocale;
 
-local requestedDisplayLocale = selectedDisplayLocale == "auto" and GetLocale() or selectedDisplayLocale;
-local effectiveDisplayLocale = NormalizeDisplayLocale(requestedDisplayLocale);
-if effectiveDisplayLocale == "auto" or not effectiveDisplayLocale then
-	effectiveDisplayLocale = "enUS";
+function Achievements.GetDroppedDisplayLocale()
+	ResolveDisplayLocale();
+	return droppedDisplayLocale;
 end
 
 function Achievements.GetDisplayLocale()
+	ResolveDisplayLocale();
 	return selectedDisplayLocale, effectiveDisplayLocale;
 end
 
@@ -108,6 +120,8 @@ function Achievements.GetAvailableDisplayLocales()
 end
 
 function Achievements.SetDisplayLocale(locale)
+	ResolveDisplayLocale();
+
 	local normalizedLocale = NormalizeDisplayLocale(locale);
 	if not normalizedLocale then
 		return nil, false;
@@ -119,6 +133,23 @@ function Achievements.SetDisplayLocale(locale)
 	selectedDisplayLocale = normalizedLocale;
 	return normalizedLocale, true;
 end
+
+-- Generated text fields that runtime code matches against strings returned by
+-- live client APIs (skill lines, zone names, readable-object titles, incoming
+-- chat links, ...). When the display locale is overridden these must still be
+-- resolvable in the WoW client locale, otherwise criteria tracking silently
+-- stops matching. Everything else is display-only and may follow the override.
+local CLIENT_MATCHED_TEXT_FIELDS = {
+	achievements = { name = true },
+	criteriaTrees = { description = true },
+	factions = { name = true },
+	skillLines = { name = true },
+	uiMaps = { name = true },
+};
+
+-- Pre-overlay (generated English) values for matched fields the display overlay
+-- replaced, so the client-locale text can still be recovered.
+local replacedBaseText = {};
 
 local function ApplyGeneratedLocalizations()
 	local localizations = ACHIEVEMENTS_DATA.localizations;
@@ -137,12 +168,25 @@ local function ApplyGeneratedLocalizations()
 
 	for tableName, records in pairs(localeData) do
 		local targetTable = LOCALIZED_DATA_TABLES[tableName] and ACHIEVEMENTS_DATA[tableName];
+		local matchedFields = displayLocaleDiffersFromClient and CLIENT_MATCHED_TEXT_FIELDS[tableName] or nil;
 		if type(targetTable) == "table" and type(records) == "table" then
 			for recordID, fields in pairs(records) do
 				local targetRecord = targetTable[recordID];
 				if type(targetRecord) == "table" and type(fields) == "table" then
 					for fieldName, value in pairs(fields) do
 						if type(value) == "string" and value ~= "" then
+							if matchedFields and matchedFields[fieldName] then
+								local baseValue = rawget(targetRecord, fieldName);
+								if type(baseValue) == "string" and baseValue ~= "" then
+									local baseRecords = replacedBaseText[tableName];
+									if not baseRecords then
+										baseRecords = {};
+										replacedBaseText[tableName] = baseRecords;
+									end
+									baseRecords[recordID] = baseRecords[recordID] or {};
+									baseRecords[recordID][fieldName] = baseValue;
+								end
+							end
 							rawset(targetRecord, fieldName, value);
 						end
 					end
@@ -152,7 +196,108 @@ local function ApplyGeneratedLocalizations()
 	end
 end
 
-ApplyGeneratedLocalizations();
+local displayLocaleResolved = false;
+
+-- Resolves the saved display locale and applies the overlay. Safe to call more
+-- than once; only the first call does the work. Called from ADDON_LOADED and,
+-- defensively, from every public accessor so no consumer can observe an
+-- unresolved locale even if it runs before the event fires.
+ResolveDisplayLocale = function()
+	if displayLocaleResolved then
+		return;
+	end
+	displayLocaleResolved = true;
+
+	local savedDisplayLocale = AchievementsDB and AchievementsDB.displayLocale;
+	selectedDisplayLocale = NormalizeDisplayLocale(savedDisplayLocale) or "auto";
+	if savedDisplayLocale ~= nil then
+		if selectedDisplayLocale == "auto" and savedDisplayLocale ~= "auto" then
+			-- The saved locale is no longer shipped by the installed data package.
+			droppedDisplayLocale = tostring(savedDisplayLocale);
+		end
+		AchievementsDB.displayLocale = selectedDisplayLocale;
+	end
+
+	local requestedDisplayLocale = selectedDisplayLocale == "auto" and GetLocale() or selectedDisplayLocale;
+	effectiveDisplayLocale = NormalizeDisplayLocale(requestedDisplayLocale);
+	if effectiveDisplayLocale == "auto" or not effectiveDisplayLocale then
+		effectiveDisplayLocale = "enUS";
+	end
+
+	clientEffectiveLocale = NormalizeDisplayLocale(GetLocale());
+	if clientEffectiveLocale == "auto" or not clientEffectiveLocale then
+		clientEffectiveLocale = "enUS";
+	end
+
+	displayLocaleDiffersFromClient = effectiveDisplayLocale ~= clientEffectiveLocale;
+
+	ApplyGeneratedLocalizations();
+end
+
+Achievements.ResolveDisplayLocale = ResolveDisplayLocale;
+
+do
+	local localeFrame = CreateFrame("Frame");
+	localeFrame:RegisterEvent("ADDON_LOADED");
+	localeFrame:SetScript("OnEvent", function(self, _, addonName)
+		if addonName ~= ADDON_NAME then
+			return;
+		end
+		self:UnregisterEvent("ADDON_LOADED");
+		ResolveDisplayLocale();
+	end);
+end
+
+-- Returns the given generated text field in the WoW client locale. Without a
+-- display-locale override this is simply the live value; with an override it
+-- resolves through the client-locale overlay and falls back to the generated
+-- English base text.
+function Achievements.GetClientLocaleText(tableName, recordID, fieldName)
+	ResolveDisplayLocale();
+
+	local targetTable = ACHIEVEMENTS_DATA[tableName];
+	local targetRecord = type(targetTable) == "table" and targetTable[recordID] or nil;
+	local displayValue = type(targetRecord) == "table" and targetRecord[fieldName] or nil;
+	if type(displayValue) ~= "string" or displayValue == "" then
+		displayValue = nil;
+	end
+
+	if not displayLocaleDiffersFromClient then
+		return displayValue;
+	end
+
+	local matchedFields = CLIENT_MATCHED_TEXT_FIELDS[tableName];
+	if not matchedFields or not matchedFields[fieldName] then
+		return displayValue;
+	end
+
+	if clientEffectiveLocale ~= "enUS" then
+		local localizations = ACHIEVEMENTS_DATA.localizations;
+		local localeData = type(localizations) == "table" and localizations[clientEffectiveLocale] or nil;
+		local records = type(localeData) == "table" and localeData[tableName] or nil;
+		local record = type(records) == "table" and records[recordID] or nil;
+		local value = type(record) == "table" and record[fieldName] or nil;
+		if type(value) == "string" and value ~= "" then
+			return value;
+		end
+	end
+
+	local baseRecords = replacedBaseText[tableName];
+	local baseRecord = baseRecords and baseRecords[recordID];
+	local baseValue = baseRecord and baseRecord[fieldName];
+	if type(baseValue) == "string" and baseValue ~= "" then
+		return baseValue;
+	end
+
+	return displayValue;
+end
+
+function Achievements.IsDisplayLocaleOverridingClientLocale()
+	ResolveDisplayLocale();
+	return displayLocaleDiffersFromClient;
+end
+
+end
 
 local DEFAULT_ACHIEVEMENT_ICON = "Interface\\Icons\\INV_Misc_QuestionMark";
 local ACHIEVEMENT_EARNED_SOUND_FILE = "Interface\\AddOns\\" .. tostring(ADDON_NAME or "Achievements") .. "\\Media\\AchievementEarned.ogg";
