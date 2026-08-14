@@ -110,6 +110,10 @@ The override only affects generated achievement content, such as achievement nam
 
 Achievement tracking is unaffected by the override. Where the addon has to match generated text against text the game client produces, such as skill and profession names, battleground zone and faction names, readable-object titles, targeted emote names, and incoming achievement chat links, it always matches against the client-language text.
 
+## Community
+
+Join our community on [Discord](https://discord.gg/TrJFGcah7z) for support, bug reports, and feedback.
+
 ## Notes and Limitations
 
 - This addon is a local Classic achievement system. It is not Blizzard's account-wide Retail achievement service.

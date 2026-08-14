@@ -23,7 +23,7 @@ local Private = Achievements.private or {};
 Achievements.private = Private;
 
 local DEBUG = false;
-DEBUG = true; -- ACHIEVEMENTS_REMOVE_LINE
+DEBUG = true; -- REMOVE_LINE
 Private.DEBUG = DEBUG == true;
 
 local ACHIEVEMENTS_DATA = _G.AchievementsData;

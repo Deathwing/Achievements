@@ -37,6 +37,10 @@ The runtime addon lives in `Achievements`; this package keeps generated data and
 
 Use the `Achievements` and `AchievementsData` packages from the same release whenever possible. Newer data can add or correct metadata, icons, criteria, and localizations, while the runtime addon handles the UI, saved progress, tracking, chat links, networking, comparison, and title support.
 
+## Community
+
+Join our community on [Discord](https://discord.gg/TrJFGcah7z) for support, bug reports, and feedback.
+
 ## Notes
 
 - These files are generated and should not be edited manually.

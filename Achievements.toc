@@ -6,7 +6,7 @@
 ## Version: 1.1.0
 ## X-Website: https://github.com/Deathwing/Achievements
 ## X-Repository: https://github.com/Deathwing/Achievements
-## X-Curse-Project-ID: 1535715
+## X-Curse-Project-ID: 1644657
 ## X-Wago-ID: EGPenjN1
 ## X-WoWI-ID: 27169
 ## X-License: GNU GPL3
@@ -22,16 +22,16 @@
 ## Category-ruRU: Коллекции отряда
 ## Category-zhCN: 战团藏品
 ## Category-zhTW: 戰隊收藏
-# ACHIEVEMENTS_UNCOMMENT_NEXT_LINE
+# UNCOMMENT_NEXT_LINE
 # ## Dependencies: AchievementsData
 ## SavedVariables: AchievementsDB
 ## SavedVariablesPerCharacter: AchievementsCharacterDB
 
-# ACHIEVEMENTS_REMOVE_NEXT_LINE
+# REMOVE_NEXT_LINE
 Data/AchievementsData_Classic.lua [AllowLoadGameType vanilla]
-# ACHIEVEMENTS_REMOVE_NEXT_LINE
+# REMOVE_NEXT_LINE
 Data/AchievementsData_TBC.lua [AllowLoadGameType tbc]
-# ACHIEVEMENTS_REMOVE_NEXT_LINE
+# REMOVE_NEXT_LINE
 Data/AchievementsIconAssets.lua
 Achievements.lua
 AchievementsCriteriaResolvers.lua
