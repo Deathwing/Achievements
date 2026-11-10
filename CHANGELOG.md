@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- `/ach versions` no longer says "embedded in Achievements" when a newer `AchievementsData` copy comes from somewhere else than the copy inside Achievements.
+
 ## 1.2.0 - 2026-11-10
 
 - Added support for World of Warcraft: Forever (interface 16001). Forever runs the Mainline API, so the addon ships a small compatibility layer that maps the Classic-era functions it relies on onto it (file-local, without defining them globally), and a fully namespaced Forever copy of the bundled achievement window that coexists with Blizzard's Legacy system (which is built on the native achievement API, so the addon no longer overrides those functions there). On Forever the default keys are `SHIFT-Y` for achievements and `CTRL-Y` for statistics, because `Y` belongs to the Legacy window. Tracked achievements appear as an "Achievements" section in the objective tracker, styled like Blizzard's own, and follow the tracker's own re-layouts. Forever gets its own generated data set (`AchievementsData_Camelot.lua`) built from Forever's game tables, so zones, exploration overlays, reputations, quests and titles resolve against Forever's real IDs, and achievements Forever also defines natively use Forever's criteria. Forever closes the combat log to addons, so kills, casts, honorable kills, damage, healing and deaths are tracked from encounter results, visible unit deaths, loot, chat messages, your own casts and combat text, Blizzard's damage meter and the death recap instead; killing blows, the longest fall survived, the largest hit dealt and the largest heal cast remain untracked there (see the README for the full list).

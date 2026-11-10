@@ -238,7 +238,7 @@ function Update.PrintVersions()
 			local standaloneActive = standaloneLoaded and (tostring(runtimeVersion) == tocVersion or FormatVersion(runtimeVersion) == tocVersion or tostring(lib.version) == tocVersion);
 			local note = "";
 			if standaloneLoaded and not standaloneActive then
-				note = " |cff999999(embedded in Achievements; standalone " .. FormatTocVersion(version) .. " superseded)|r";
+				note = " |cff999999(" .. (embedded and "embedded in Achievements" or "another addon's copy") .. "; standalone " .. FormatTocVersion(version) .. " superseded)|r";
 			elseif standaloneLoaded then
 				note = " |cff999999(standalone)|r";
 			elseif embedded then
