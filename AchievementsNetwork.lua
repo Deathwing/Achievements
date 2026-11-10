@@ -11,6 +11,7 @@ local CHANNEL_BASE = "achievements";
 local CHANNEL_PASSWORD = nil;
 local CHANNEL_JOIN_DELAY = 3;
 local CHANNEL_RETRY_DELAY = 4;
+local CHANNEL_RESTORE_TIMEOUT = 10;
 local VERSION_ANNOUNCE_DELAY = 3;
 local VERSION_ANNOUNCE_COOLDOWN = 120;
 local CHUNK_SOFT_LIMIT = 220;
@@ -30,6 +31,7 @@ local prefixRegistered;
 local listenerFrame;
 local activeChannelName;
 local joiningChannel;
+local channelsRestored;
 local versionAnnounceScheduled;
 local filtersInstalled;
 local staticPopupHooked;
@@ -423,7 +425,23 @@ local function GetJoinedChannelID(channelName)
 	return nil;
 end
 
+local function FindJoinedDiscoveryChannel()
+	for _, channelName in ipairs(channelCandidates) do
+		if GetJoinedChannelID(channelName) then
+			return channelName;
+		end
+	end
+	return nil;
+end
+
 local function TryJoinDiscoveryChannel(candidateIndex)
+	local joinedChannelName = FindJoinedDiscoveryChannel();
+	if joinedChannelName then
+		activeChannelName = joinedChannelName;
+		joiningChannel = nil;
+		HideChannelFromChatFrames(joinedChannelName);
+		return;
+	end
 	candidateIndex = candidateIndex or 1;
 	local channelName = channelCandidates[candidateIndex];
 	if not channelName then
@@ -447,6 +465,15 @@ local function TryJoinDiscoveryChannel(candidateIndex)
 	end);
 end
 
+local function StartDiscoveryJoin()
+	if not channelsRestored then
+		return;
+	end
+	CallAfter(CHANNEL_JOIN_DELAY, function()
+		TryJoinDiscoveryChannel(1);
+	end);
+end
+
 local function JoinDiscoveryChannel()
 	InstallChannelFilters();
 	if activeChannelName and GetJoinedChannelID(activeChannelName) then
@@ -456,8 +483,18 @@ local function JoinDiscoveryChannel()
 	if joiningChannel then
 		return;
 	end
-	CallAfter(CHANNEL_JOIN_DELAY, function()
-		TryJoinDiscoveryChannel(1);
+	joiningChannel = true;
+	-- Cached channels are restored (CHANNEL_UI_UPDATE) after PLAYER_ENTERING_WORLD; joining earlier reshuffles channel numbers.
+	if channelsRestored then
+		StartDiscoveryJoin();
+		return;
+	end
+	CallAfter(CHANNEL_RESTORE_TIMEOUT, function()
+		if channelsRestored then
+			return;
+		end
+		channelsRestored = true;
+		StartDiscoveryJoin();
 	end);
 end
 
@@ -691,8 +728,16 @@ local function EnsureListener()
 	pcall(listenerFrame.RegisterEvent, listenerFrame, "CHAT_MSG_CHANNEL_LIST");
 	pcall(listenerFrame.RegisterEvent, listenerFrame, "CHANNEL_ROSTER_UPDATE");
 	pcall(listenerFrame.RegisterEvent, listenerFrame, "CHANNEL_COUNT_UPDATE");
+	pcall(listenerFrame.RegisterEvent, listenerFrame, "CHANNEL_UI_UPDATE");
 	listenerFrame:SetScript("OnEvent", function(_, event, ...)
-		if event == "CHAT_MSG_ADDON" then
+		if event == "CHANNEL_UI_UPDATE" then
+			if not channelsRestored then
+				channelsRestored = true;
+				if joiningChannel then
+					StartDiscoveryJoin();
+				end
+			end
+		elseif event == "CHAT_MSG_ADDON" then
 			HandleAddonMessage(...);
 		elseif event == "PLAYER_ENTERING_WORLD" then
 			JoinDiscoveryChannel();

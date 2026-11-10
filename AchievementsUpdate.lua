@@ -7,8 +7,8 @@ local Update = {};
 Achievements.Update = Update;
 
 local SOURCES = {
-	{ name = "GitHub", url = "https://github.com/Deathwing/Achievements/releases/latest" },
 	{ name = "CurseForge", url = "https://www.curseforge.com/wow/addons/achievements-addon" },
+	{ name = "GitHub", url = "https://github.com/Deathwing/Achievements/releases/latest" },
 	{ name = "Wago", url = "https://addons.wago.io/addons/achievements" },
 	{ name = "WoWInterface", url = "https://www.wowinterface.com/downloads/info27169-Achievements.html" },
 };
@@ -49,7 +49,13 @@ end
 
 local function CreateSourceFrame()
 	local frame = CreateFrame("Frame", "AchievementsUpdateSourcesFrame", UIParent, "BackdropTemplate");
-	frame:SetSize(460, 190);
+	local BUTTONS_PER_ROW, BUTTON_WIDTH, BUTTON_HEIGHT = 2, 170, 28;
+	local COL_GAP, ROW_GAP = 10, 6;
+	local rows = math.ceil(#SOURCES / BUTTONS_PER_ROW);
+	local grid_width = BUTTONS_PER_ROW * BUTTON_WIDTH + (BUTTONS_PER_ROW - 1) * COL_GAP;
+	local grid_height = rows * BUTTON_HEIGHT + (rows - 1) * ROW_GAP;
+	local frame_width = grid_width + 100;
+	frame:SetSize(frame_width, 200); -- height is set below once the text is measured
 	frame:SetPoint("CENTER");
 	frame:SetFrameStrata("DIALOG");
 	frame:SetClampedToScreen(true);
@@ -77,31 +83,38 @@ local function CreateSourceFrame()
 
 	local description = frame:CreateFontString(nil, "ARTWORK", "GameFontHighlight");
 	description:SetPoint("TOP", title, "BOTTOM", 0, -10);
+	description:SetWidth(frame_width - 50);
+	description:SetJustifyH("CENTER");
 	description:SetText("Choose an official download source, then copy the selected address.");
 
+	-- top margin + title + gap + description + gap + grid + gap + address box + bottom margin
+	frame:SetHeight(22 + title:GetStringHeight() + 10 + description:GetStringHeight() + 20
+		+ grid_height + 24 + 28 + 24);
+
 	local editBox = CreateFrame("EditBox", nil, frame, "InputBoxTemplate");
-	editBox:SetSize(400, 28);
+	editBox:SetSize(grid_width + 20, 28);
 	editBox:SetPoint("BOTTOM", 0, 24);
 	editBox:SetAutoFocus(false);
 	editBox:SetScript("OnEscapePressed", editBox.ClearFocus);
 	frame.editBox = editBox;
 
-	local previousButton;
-	for _, source in ipairs(SOURCES) do
-		local button = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate");
-		button:SetSize(120, 28);
-		if previousButton then
-			button:SetPoint("LEFT", previousButton, "RIGHT", 10, 0);
-		else
-			button:SetPoint("TOPLEFT", 35, -82);
-		end
+	local grid = CreateFrame("Frame", nil, frame);
+	grid:SetSize(grid_width, grid_height);
+	grid:SetPoint("TOP", description, "BOTTOM", 0, -20);
+
+	for index, source in ipairs(SOURCES) do
+		local col = (index - 1) % BUTTONS_PER_ROW;
+		local row = math.floor((index - 1) / BUTTONS_PER_ROW);
+		local button = CreateFrame("Button", nil, grid, "UIPanelButtonTemplate");
+		button:SetSize(BUTTON_WIDTH, BUTTON_HEIGHT);
+		button:SetPoint("TOPLEFT", grid, "TOPLEFT",
+			col * (BUTTON_WIDTH + COL_GAP), -row * (BUTTON_HEIGHT + ROW_GAP));
 		button:SetText(source.name);
 		button:SetScript("OnClick", function()
 			editBox:SetText(source.url);
 			editBox:SetFocus();
 			editBox:HighlightText();
 		end);
-		previousButton = button;
 	end
 
 	editBox:SetText(SOURCES[1].url);
@@ -181,7 +194,28 @@ function Update.Notify(newVersion)
 		return;
 	end
 	warnedVersions[newVersion] = true;
-	Print("|cffffff00Achievements:|r A newer version (v" .. newVersion .. ") is available; you are running v" .. GetVersion() .. ". Type |cffffffff/ach update|r for official GitHub, CurseForge, and Wago downloads.");
+	Print("|cffffff00Achievements:|r A newer version (v" .. newVersion .. ") is available; you are running v" .. GetVersion() .. ". Type |cffffffff/ach update|r for official CurseForge, GitHub, and Wago downloads.");
+end
+
+local function FormatVersion(version)
+	if type(version) == "number" then
+		if version >= 1e9 then
+			return date("!%Y-%m-%d", version);
+		elseif version >= 10000 then
+			return string.format("%d.%d.%d", math.floor(version / 10000), math.floor(version / 100) % 100, version % 100);
+		end
+	end
+	return tostring(version);
+end
+
+local function FormatTocVersion(version)
+	local stamp = tonumber(version);
+	return stamp and stamp >= 1e9 and FormatVersion(stamp) or tostring(version);
+end
+
+local function GetMetadata(name, field)
+	local ok, value = pcall(C_AddOns.GetAddOnMetadata, name, field);
+	return ok and value or nil;
 end
 
 --- Print the versions of Achievements and its bundled sub-addons to chat,
@@ -192,20 +226,33 @@ function Update.PrintVersions()
 	local mainVersion = GetVersion();
 	Print("  Achievements: |cffffffff" .. mainVersion .. "|r");
 
-	-- Optional data companion. GetAddOnMetadata reads the on-disk TOC, so it
-	-- returns a version even when AchievementsData is installed but DISABLED
-	-- (unchecked) — misleading because a disabled companion contributes nothing
-	-- at runtime. Report the loaded state: skip when not installed, mark it
-	-- (disabled) when installed but not loaded.
-	local dataOk, dataVersion = pcall(C_AddOns.GetAddOnMetadata, "AchievementsData", "Version");
-	if dataOk and dataVersion then
-		local isLoaded = C_AddOns and C_AddOns.IsAddOnLoaded or IsAddOnLoaded;
-		if isLoaded and isLoaded("AchievementsData") then
-			Print("  AchievementsData: |cffffffff" .. tostring(dataVersion) .. "|r");
-		else
-			Print("  AchievementsData: |cffffffff" .. tostring(dataVersion) .. "|r |cff999999(installed, disabled)|r");
+	local isLoaded = C_AddOns and C_AddOns.IsAddOnLoaded or IsAddOnLoaded;
+	local embeds = ", " .. (GetMetadata("Achievements", "X-Embeds") or "") .. ",";
+	local function PrintCompanion(label, name, lib)
+		local version = GetMetadata(name, "Version");
+		local runtimeVersion = lib and lib.VERSION;
+		local standaloneLoaded = version and isLoaded and isLoaded(name);
+		local embedded = embeds:find(", " .. name .. ",", 1, true) ~= nil;
+		if runtimeVersion ~= nil then
+			local tocVersion = (tostring(version or ""):gsub("^v", ""));
+			local standaloneActive = standaloneLoaded and (tostring(runtimeVersion) == tocVersion or FormatVersion(runtimeVersion) == tocVersion or tostring(lib.version) == tocVersion);
+			local note = "";
+			if standaloneLoaded and not standaloneActive then
+				note = " |cff999999(embedded in Achievements; standalone " .. FormatTocVersion(version) .. " superseded)|r";
+			elseif standaloneLoaded then
+				note = " |cff999999(standalone)|r";
+			elseif embedded then
+				note = " |cff999999(embedded in Achievements)|r";
+			end
+			Print("  " .. label .. ": |cffffffff" .. FormatVersion(runtimeVersion) .. "|r" .. note);
+		elseif standaloneLoaded then
+			Print("  " .. label .. ": |cffffffff" .. FormatTocVersion(version) .. "|r |cff999999(standalone)|r");
+		elseif version then
+			Print("  " .. label .. ": |cffffffff" .. FormatTocVersion(version) .. "|r |cff999999(installed, disabled)|r");
 		end
 	end
+
+	PrintCompanion("AchievementsData", "AchievementsData", rawget(_G, "AchievementsData"));
 
 	-- Note a known newer version, if one has been detected from other players.
 	local detected = AchievementsDB and AchievementsDB.newestDetectedUpdateVersion;

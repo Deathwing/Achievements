@@ -1,8 +1,8 @@
 <Bindings>
 	<Binding name="TOGGLEACHIEVEMENT" header="ACHIEVEMENTS" default="Y">
-		ToggleAchievementFrame();
+		if Achievements and Achievements.ToggleAchievementFrame then Achievements.ToggleAchievementFrame(); else ToggleAchievementFrame(); end
 	</Binding>
 	<Binding name="TOGGLESTATISTICS" default="SHIFT-Y">
-		ToggleAchievementFrame(true);
+		if Achievements and Achievements.ToggleAchievementFrame then Achievements.ToggleAchievementFrame(true); else ToggleAchievementFrame(true); end
 	</Binding>
 </Bindings>

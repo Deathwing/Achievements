@@ -18,13 +18,20 @@ end
 
 local Achievements = _G.Achievements or {};
 _G.Achievements = Achievements;
+Achievements.IS_FOREVER = WOW_PROJECT_ID == WOW_PROJECT_CAMELOT;
 
 local Private = Achievements.private or {};
 Achievements.private = Private;
+local SetPortraitToTexture = SetPortraitToTexture or (rawget(_G, "AchievementsForeverCompat") or {}).SetPortraitToTexture;
 
 local DEBUG = false;
 DEBUG = true; -- REMOVE_LINE
 Private.DEBUG = DEBUG == true;
+
+function Private.UIName(name)
+	local map = rawget(_G, "AchievementsForeverUIGlobalNames");
+	return map and map[name] or name;
+end
 
 local ACHIEVEMENTS_DATA = _G.AchievementsData;
 if not ACHIEVEMENTS_DATA then
@@ -371,7 +378,7 @@ local MODIFIER_TREE_CHILDREN = ACHIEVEMENTS_DATA.modifierTreeChildren;
 local CRITERIA_BY_ACHIEVEMENT = ACHIEVEMENTS_DATA.criteriaByAchievement;
 local ACHIEVEMENT_BY_CRITERIA = ACHIEVEMENTS_DATA.achievementByCriteria;
 local SUPERCEDED_BY = ACHIEVEMENTS_DATA.supercededBy;
-local ICON_ASSET_OVERRIDES = _G.AchievementsIconAssets or {};
+local ICON_ASSET_OVERRIDES = ACHIEVEMENTS_DATA.iconAssets or _G.AchievementsIconAssets or {};
 
 for achievementID, achievement in pairs(ACHIEVEMENT_DATA) do
 	local previousAchievementID = achievement.supercedes or 0;
@@ -1061,8 +1068,8 @@ local function RefreshAchievementFrameTracking()
 		AchievementsFrame.trackedAchievements[achievementID] = nil;
 	end
 
-	if AchievementFrame_UpdateTrackedAchievements then
-		AchievementFrame_UpdateTrackedAchievements(Achievements.GetTrackedAchievements());
+	if _G[Private.UIName("AchievementFrame_UpdateTrackedAchievements")] then
+		_G[Private.UIName("AchievementFrame_UpdateTrackedAchievements")](Achievements.GetTrackedAchievements());
 	else
 		for achievementID in pairs(trackedAchievements) do
 			AchievementsFrame.trackedAchievements[achievementID] = true;
@@ -1084,7 +1091,7 @@ local function NotifyTrackedAchievementsChanged()
 end
 
 local function EnsureAchievementUIForNotification()
-	if AchievementsFrame and AchievementShield_SetPoints then
+	if AchievementsFrame and _G[Private.UIName("AchievementShield_SetPoints")] then
 		return;
 	end
 
@@ -2050,10 +2057,10 @@ function Achievements.OpenComparisonForName(targetName, points, completed, unit,
 	if AchievementsFrameComparison_ForceUpdate then
 		-- Auto-select the first real category so the list isn't empty on open.
 		-- (Summary is always [1]; the first numeric entry is the first real category.)
-		if ACHIEVEMENTUI_CATEGORIES and COMPARISON_ACHIEVEMENT_FUNCTIONS then
-			for _, cat in next, ACHIEVEMENTUI_CATEGORIES do
+		if _G[Private.UIName("ACHIEVEMENTUI_CATEGORIES")] and _G[Private.UIName("COMPARISON_ACHIEVEMENT_FUNCTIONS")] then
+			for _, cat in next, _G[Private.UIName("ACHIEVEMENTUI_CATEGORIES")] do
 				if type(cat.id) == "number" then
-					COMPARISON_ACHIEVEMENT_FUNCTIONS.selectedCategory = cat.id;
+					_G[Private.UIName("COMPARISON_ACHIEVEMENT_FUNCTIONS")].selectedCategory = cat.id;
 					if AchievementsFrameComparison_UpdateStatusBars then
 						AchievementsFrameComparison_UpdateStatusBars(cat.id);
 					end
@@ -2099,10 +2106,10 @@ function Achievements.RefreshComparisonData(targetName, points, completed, unit,
 		end
 	end
 
-	if AchievementsFrameComparison_UpdateStatusBars and achievementFunctions == COMPARISON_ACHIEVEMENT_FUNCTIONS then
-		local category = achievementFunctions.selectedCategory;
-		if not category or category == "summary" or category == ACHIEVEMENT_COMPARISON_STATS_SUMMARY_ID then
-			category = ACHIEVEMENT_COMPARISON_SUMMARY_ID;
+	if AchievementsFrameComparison_UpdateStatusBars and _G[Private.UIName("achievementFunctions")] == _G[Private.UIName("COMPARISON_ACHIEVEMENT_FUNCTIONS")] then
+		local category = _G[Private.UIName("achievementFunctions")].selectedCategory;
+		if not category or category == "summary" or category == _G[Private.UIName("ACHIEVEMENT_COMPARISON_STATS_SUMMARY_ID")] then
+			category = _G[Private.UIName("ACHIEVEMENT_COMPARISON_SUMMARY_ID")];
 		end
 		AchievementsFrameComparison_UpdateStatusBars(category);
 	end

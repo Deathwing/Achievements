@@ -19,18 +19,23 @@ if Achievements.hookSimpleActionCriteria then
 end
 
 local eventFrame = CreateFrame("Frame");
-eventFrame:RegisterEvent("ADDON_LOADED");
-eventFrame:RegisterEvent("PLAYER_ENTERING_WORLD");
-eventFrame:RegisterEvent("ZONE_CHANGED_NEW_AREA");
-eventFrame:RegisterEvent("PLAYER_LEVEL_UP");
-eventFrame:RegisterEvent("QUEST_ACCEPTED");
-eventFrame:RegisterEvent("QUEST_TURNED_IN");
-eventFrame:RegisterEvent("QUEST_LOG_UPDATE");
-eventFrame:RegisterEvent("MAP_EXPLORATION_UPDATED");
-eventFrame:RegisterEvent("SPELLS_CHANGED");
-pcall(eventFrame.RegisterEvent, eventFrame, "LEARNED_SPELL_IN_TAB");
-pcall(eventFrame.RegisterEvent, eventFrame, "PLAYER_TALENT_UPDATE");
-pcall(eventFrame.RegisterEvent, eventFrame, "ACTIVE_TALENT_GROUP_CHANGED");
+
+local function RegisterEventSafe(event)
+	local ok = pcall(eventFrame.RegisterEvent, eventFrame, event);
+	return ok;
+end
+RegisterEventSafe("ADDON_LOADED");
+RegisterEventSafe("PLAYER_ENTERING_WORLD");
+RegisterEventSafe("ZONE_CHANGED_NEW_AREA");
+RegisterEventSafe("PLAYER_LEVEL_UP");
+RegisterEventSafe("QUEST_ACCEPTED");
+RegisterEventSafe("QUEST_TURNED_IN");
+RegisterEventSafe("QUEST_LOG_UPDATE");
+RegisterEventSafe("MAP_EXPLORATION_UPDATED");
+RegisterEventSafe("SPELLS_CHANGED");
+RegisterEventSafe("LEARNED_SPELL_IN_TAB");
+RegisterEventSafe("PLAYER_TALENT_UPDATE");
+RegisterEventSafe("ACTIVE_TALENT_GROUP_CHANGED");
 -- UNIT_AURA / UNIT_SPELLCAST_SUCCEEDED fire for every visible unit (target,
 -- focus, party/raid members, nameplates). In raids that is a constant stream of
 -- dispatches that all get discarded because the handlers only act on "player".
@@ -38,63 +43,66 @@ pcall(eventFrame.RegisterEvent, eventFrame, "ACTIVE_TALENT_GROUP_CHANGED");
 -- for other units. Fall back to the unfiltered registration on the rare client
 -- that lacks RegisterUnitEvent.
 if eventFrame.RegisterUnitEvent then
-	eventFrame:RegisterUnitEvent("UNIT_AURA", "player");
-	eventFrame:RegisterUnitEvent("UNIT_SPELLCAST_SUCCEEDED", "player");
+	pcall(eventFrame.RegisterUnitEvent, eventFrame, "UNIT_AURA", "player");
+	pcall(eventFrame.RegisterUnitEvent, eventFrame, "UNIT_SPELLCAST_SUCCEEDED", "player");
 else
-	eventFrame:RegisterEvent("UNIT_AURA");
-	eventFrame:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED");
+	RegisterEventSafe("UNIT_AURA");
+	RegisterEventSafe("UNIT_SPELLCAST_SUCCEEDED");
 end
-eventFrame:RegisterEvent("SKILL_LINES_CHANGED");
-eventFrame:RegisterEvent("UPDATE_FACTION");
-eventFrame:RegisterEvent("BAG_UPDATE_DELAYED");
-eventFrame:RegisterEvent("ITEM_PUSH");
-eventFrame:RegisterEvent("LOOT_OPENED");
-eventFrame:RegisterEvent("CHAT_MSG_LOOT");
-eventFrame:RegisterEvent("CHAT_MSG_MONEY");
-eventFrame:RegisterEvent("PLAYER_EQUIPMENT_CHANGED");
-eventFrame:RegisterEvent("PLAYERBANKSLOTS_CHANGED");
-eventFrame:RegisterEvent("PLAYER_MONEY");
-eventFrame:RegisterEvent("COMBAT_LOG_EVENT_UNFILTERED");
-eventFrame:RegisterEvent("PLAYER_DEAD");
-eventFrame:RegisterEvent("PLAYER_PVP_RANK_CHANGED");
-eventFrame:RegisterEvent("UPDATE_BATTLEFIELD_STATUS");
-pcall(eventFrame.RegisterEvent, eventFrame, "UPDATE_BATTLEFIELD_SCORE");
-pcall(eventFrame.RegisterEvent, eventFrame, "BATTLEGROUND_POINTS_UPDATE");
-pcall(eventFrame.RegisterEvent, eventFrame, "PVP_WORLDSTATE_UPDATE");
-eventFrame:RegisterEvent("CHAT_MSG_SYSTEM");
-pcall(eventFrame.RegisterEvent, eventFrame, "CHAT_MSG_BG_SYSTEM_ALLIANCE");
-pcall(eventFrame.RegisterEvent, eventFrame, "CHAT_MSG_BG_SYSTEM_HORDE");
-pcall(eventFrame.RegisterEvent, eventFrame, "CHAT_MSG_BG_SYSTEM_NEUTRAL");
-eventFrame:RegisterEvent("CHAT_MSG_TEXT_EMOTE");
-pcall(eventFrame.RegisterEvent, eventFrame, "GROUP_ROSTER_UPDATE");
+RegisterEventSafe("SKILL_LINES_CHANGED");
+RegisterEventSafe("UPDATE_FACTION");
+RegisterEventSafe("BAG_UPDATE_DELAYED");
+RegisterEventSafe("ITEM_PUSH");
+RegisterEventSafe("LOOT_OPENED");
+RegisterEventSafe("CHAT_MSG_LOOT");
+RegisterEventSafe("CHAT_MSG_MONEY");
+RegisterEventSafe("PLAYER_EQUIPMENT_CHANGED");
+RegisterEventSafe("PLAYERBANKSLOTS_CHANGED");
+RegisterEventSafe("PLAYER_MONEY");
+-- Forever forbids addon combat log registration.
+if type(CombatLogGetCurrentEventInfo) == "function" then
+	RegisterEventSafe("COMBAT_LOG_EVENT_UNFILTERED");
+end
+RegisterEventSafe("PLAYER_DEAD");
+RegisterEventSafe("PLAYER_PVP_RANK_CHANGED");
+RegisterEventSafe("UPDATE_BATTLEFIELD_STATUS");
+RegisterEventSafe("UPDATE_BATTLEFIELD_SCORE");
+RegisterEventSafe("BATTLEGROUND_POINTS_UPDATE");
+RegisterEventSafe("PVP_WORLDSTATE_UPDATE");
+RegisterEventSafe("CHAT_MSG_SYSTEM");
+RegisterEventSafe("CHAT_MSG_BG_SYSTEM_ALLIANCE");
+RegisterEventSafe("CHAT_MSG_BG_SYSTEM_HORDE");
+RegisterEventSafe("CHAT_MSG_BG_SYSTEM_NEUTRAL");
+RegisterEventSafe("CHAT_MSG_TEXT_EMOTE");
+RegisterEventSafe("GROUP_ROSTER_UPDATE");
 -- Used to detect when guild chat is actually joined so own-achievement
 -- broadcasts that fire during the early-login window can wait until they'll
 -- be visible in the player's guild chat tab.
-pcall(eventFrame.RegisterEvent, eventFrame, "GUILD_ROSTER_UPDATE");
-pcall(eventFrame.RegisterEvent, eventFrame, "PLAYER_GUILD_UPDATE");
-pcall(eventFrame.RegisterEvent, eventFrame, "CHAT_MSG_GUILD");
+RegisterEventSafe("GUILD_ROSTER_UPDATE");
+RegisterEventSafe("PLAYER_GUILD_UPDATE");
+RegisterEventSafe("CHAT_MSG_GUILD");
 -- World-state events differ by client (Era vs TBC vs later); RegisterEvent
 -- raises on unknown event names so guard with pcall.
-pcall(eventFrame.RegisterEvent, eventFrame, "UPDATE_WORLD_STATES");
-pcall(eventFrame.RegisterEvent, eventFrame, "UPDATE_UI_WIDGET");
-pcall(eventFrame.RegisterEvent, eventFrame, "UPDATE_ALL_UI_WIDGETS");
-pcall(eventFrame.RegisterEvent, eventFrame, "AREA_POIS_UPDATED");
-pcall(eventFrame.RegisterEvent, eventFrame, "CALENDAR_UPDATE_EVENT");
-pcall(eventFrame.RegisterEvent, eventFrame, "CALENDAR_UPDATE_EVENT_LIST");
-pcall(eventFrame.RegisterEvent, eventFrame, "CURRENCY_DISPLAY_UPDATE");
-pcall(eventFrame.RegisterEvent, eventFrame, "ITEM_TEXT_BEGIN");
-pcall(eventFrame.RegisterEvent, eventFrame, "ITEM_TEXT_READY");
-pcall(eventFrame.RegisterEvent, eventFrame, "GAME_OBJECT_ACTIVATED");
-pcall(eventFrame.RegisterEvent, eventFrame, "BARBER_SHOP_SUCCESS");
-pcall(eventFrame.RegisterEvent, eventFrame, "MAIL_SHOW");
-pcall(eventFrame.RegisterEvent, eventFrame, "MAIL_INBOX_UPDATE");
-pcall(eventFrame.RegisterEvent, eventFrame, "BOSS_KILL");
-pcall(eventFrame.RegisterEvent, eventFrame, "ENCOUNTER_END");
-pcall(eventFrame.RegisterEvent, eventFrame, "LFG_UPDATE");
-pcall(eventFrame.RegisterEvent, eventFrame, "LFG_QUEUE_STATUS_UPDATE");
-pcall(eventFrame.RegisterEvent, eventFrame, "LFG_PROPOSAL_SHOW");
-pcall(eventFrame.RegisterEvent, eventFrame, "LFG_PROPOSAL_UPDATE");
-pcall(eventFrame.RegisterEvent, eventFrame, "LFG_PROPOSAL_FAILED");
+RegisterEventSafe("UPDATE_WORLD_STATES");
+RegisterEventSafe("UPDATE_UI_WIDGET");
+RegisterEventSafe("UPDATE_ALL_UI_WIDGETS");
+RegisterEventSafe("AREA_POIS_UPDATED");
+RegisterEventSafe("CALENDAR_UPDATE_EVENT");
+RegisterEventSafe("CALENDAR_UPDATE_EVENT_LIST");
+RegisterEventSafe("CURRENCY_DISPLAY_UPDATE");
+RegisterEventSafe("ITEM_TEXT_BEGIN");
+RegisterEventSafe("ITEM_TEXT_READY");
+RegisterEventSafe("GAME_OBJECT_ACTIVATED");
+RegisterEventSafe("BARBER_SHOP_SUCCESS");
+RegisterEventSafe("MAIL_SHOW");
+RegisterEventSafe("MAIL_INBOX_UPDATE");
+RegisterEventSafe("BOSS_KILL");
+RegisterEventSafe("ENCOUNTER_END");
+RegisterEventSafe("LFG_UPDATE");
+RegisterEventSafe("LFG_QUEUE_STATUS_UPDATE");
+RegisterEventSafe("LFG_PROPOSAL_SHOW");
+RegisterEventSafe("LFG_PROPOSAL_UPDATE");
+RegisterEventSafe("LFG_PROPOSAL_FAILED");
 
 local function ScheduleCriteriaRefresh(showAlerts, delay, reason)
 	if Achievements.ScheduleCriteriaRefresh then
@@ -123,7 +131,7 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1, arg2, arg3, arg4, arg5)
 			Achievements.applyAchievementStatsUIPatch();
 			Achievements.applyAchievementSummaryUIPatch();
 			Achievements.applyAchievementComparisonUIPatch();
-		elseif arg1 == "Blizzard_AchievementUI" then
+		elseif arg1 == "Blizzard_AchievementUI" and not Achievements.IS_FOREVER then
 			-- This addon bundles its own copy of the achievement UI and never
 			-- loads the native load-on-demand Blizzard_AchievementUI. If another
 			-- addon force-loads it, its globals overwrite our bundled UI and

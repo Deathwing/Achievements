@@ -1,6 +1,9 @@
 assets/icons/
 AchievementsData_Classic.lua
 AchievementsData_TBC.lua
+AchievementsData_Camelot.lua
 AchievementsData.toc
 AchievementsIconAssets.lua
+AchievementsData~Init.lua
+AchievementsData~Finalizer.lua
 CHANGELOG.md

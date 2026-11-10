@@ -4,6 +4,9 @@ if not Achievements then
 end
 
 local Private = Achievements.private;
+local UIName = Private.UIName;
+local FOREVER = Achievements.IS_FOREVER;
+local API = FOREVER and Achievements or _G;
 
 local LEGACY_MICRO_BUTTON_SCALE = Private.LEGACY_MICRO_BUTTON_SCALE or 0.9;
 local LEGACY_MICRO_BUTTON_SPACING = Private.LEGACY_MICRO_BUTTON_SPACING or -3;
@@ -60,7 +63,9 @@ local function SetAchievementMicroButtonTooltip(button)
 end
 
 local function ConfigureAchievementMicroButton(button)
-	LoadMicroButtonTextures(button, "Achievement");
+	if not pcall(LoadMicroButtonTextures, button, FOREVER and "Achievements" or "Achievement") then
+		pcall(LoadMicroButtonTextures, button, "Achievement");
+	end
 
 	SetAchievementMicroButtonTooltip(button);
 	button:SetScript("OnEvent", SetAchievementMicroButtonTooltip);
@@ -328,6 +333,12 @@ local function EnsureAchievementMicroButton()
 		HookMicroMenuButtonInfos();
 		InsertAchievementMicroButtonIntoLiveMenu(AchievementMicroButton);
 		LayoutLegacyAchievementMicroButton(AchievementMicroButton);
+		if FOREVER and not AchievementMicroButton.achievementsAddonClickHooked then
+			AchievementMicroButton:SetScript("OnClick", function()
+				Achievements.ToggleAchievementFrame();
+			end);
+			AchievementMicroButton.achievementsAddonClickHooked = true;
+		end
 		return AchievementMicroButton;
 	end
 
@@ -440,21 +451,21 @@ local function PatchComparisonShieldButtonFunctions()
 	if achievementComparisonShieldButtonPatched then
 		return;
 	end
-	if not AchievementComparisonPlayerButton_OnLoad and not AchievementComparisonFriendButton_OnLoad then
+	if not _G[UIName("AchievementComparisonPlayerButton_OnLoad")] and not _G[UIName("AchievementComparisonFriendButton_OnLoad")] then
 		return;
 	end
 
-	if AchievementComparisonPlayerButton_OnLoad then
-		local originalPlayerOnLoad = AchievementComparisonPlayerButton_OnLoad;
-		AchievementComparisonPlayerButton_OnLoad = function(button, ...)
+	if _G[UIName("AchievementComparisonPlayerButton_OnLoad")] then
+		local originalPlayerOnLoad = _G[UIName("AchievementComparisonPlayerButton_OnLoad")];
+		_G[UIName("AchievementComparisonPlayerButton_OnLoad")] = function(button, ...)
 			originalPlayerOnLoad(button, ...);
 			PatchAchievementShieldInstance(button and button.shield, false);
 		end;
 	end
 
-	if AchievementComparisonFriendButton_OnLoad then
-		local originalFriendOnLoad = AchievementComparisonFriendButton_OnLoad;
-		AchievementComparisonFriendButton_OnLoad = function(button, ...)
+	if _G[UIName("AchievementComparisonFriendButton_OnLoad")] then
+		local originalFriendOnLoad = _G[UIName("AchievementComparisonFriendButton_OnLoad")];
+		_G[UIName("AchievementComparisonFriendButton_OnLoad")] = function(button, ...)
 			originalFriendOnLoad(button, ...);
 			PatchAchievementShieldInstance(button and button.shield, false);
 		end;
@@ -464,8 +475,8 @@ local function PatchComparisonShieldButtonFunctions()
 end
 
 local function ApplyAchievementShieldTexturePatch()
-	if AchievementShield_SetPoints then
-		AchievementShield_SetPoints = function(points, pointString, normalFont, smallFont)
+	if _G[UIName("AchievementShield_SetPoints")] then
+		_G[UIName("AchievementShield_SetPoints")] = function(points, pointString, normalFont, smallFont)
 			points = tonumber(points) or 0;
 			if ( points == 0 ) then
 				pointString:SetText("");
@@ -480,15 +491,15 @@ local function ApplyAchievementShieldTexturePatch()
 		end;
 	end
 
-	AchievementShield_Saturate = SaturateAchievementShield;
-	AchievementShield_Desaturate = DesaturateAchievementShield;
+	_G[UIName("AchievementShield_Saturate")] = SaturateAchievementShield;
+	_G[UIName("AchievementShield_Desaturate")] = DesaturateAchievementShield;
 
 	PatchComparisonShieldDisplayFunction();
 	PatchComparisonShieldButtonFunctions();
 
-	if AchievementShield_OnLoad and not achievementShieldOnLoadPatched then
-		local originalAchievementShieldOnLoad = AchievementShield_OnLoad;
-		AchievementShield_OnLoad = function(self, ...)
+	if _G[UIName("AchievementShield_OnLoad")] and not achievementShieldOnLoadPatched then
+		local originalAchievementShieldOnLoad = _G[UIName("AchievementShield_OnLoad")];
+		_G[UIName("AchievementShield_OnLoad")] = function(self, ...)
 			originalAchievementShieldOnLoad(self, ...);
 			PatchAchievementShieldInstance(self, false);
 		end;
@@ -513,9 +524,9 @@ local function PatchedAchievementButton_UpdatePlusMinusTexture(button)
 	end
 
 	local display = false;
-	if ( GetAchievementNumCriteria(id) ~= 0 ) then
+	if ( API.GetAchievementNumCriteria(id) ~= 0 ) then
 		display = true;
-	elseif ( GetPreviousAchievement(id) and button.completed ) then
+	elseif ( API.GetPreviousAchievement(id) and button.completed ) then
 		display = true;
 	end
 
@@ -534,15 +545,15 @@ local function PatchedAchievementButton_UpdatePlusMinusTexture(button)
 end
 
 local function ApplyAchievementPlusMinusTexturePatch()
-	if not AchievementButton_UpdatePlusMinusTexture then
+	if not _G[UIName("AchievementButton_UpdatePlusMinusTexture")] then
 		return;
 	end
 
-	AchievementButton_UpdatePlusMinusTexture = PatchedAchievementButton_UpdatePlusMinusTexture;
+	_G[UIName("AchievementButton_UpdatePlusMinusTexture")] = PatchedAchievementButton_UpdatePlusMinusTexture;
 	if AchievementsFrameAchievements and AchievementsFrameAchievements.buttons then
 		for _, button in ipairs(AchievementsFrameAchievements.buttons) do
 			if button.plusMinus then
-				AchievementButton_UpdatePlusMinusTexture(button);
+				_G[UIName("AchievementButton_UpdatePlusMinusTexture")](button);
 			end
 		end
 	end
@@ -554,13 +565,13 @@ local function InvalidateAchievementStatsUICache()
 	statsUIDisplayCache.version = nil;
 	comparisonStatsUIDisplayCache.category = nil;
 	comparisonStatsUIDisplayCache.version = nil;
-	if achievementFunctions then
-		achievementFunctions.lastCategory = nil;
+	if _G[UIName("achievementFunctions")] then
+		_G[UIName("achievementFunctions")].lastCategory = nil;
 	end
 end
 
 local function PatchedAchievementFrameCategories_GetCategoryList(categories)
-	local cats = achievementFunctions.categoryAccessor();
+	local cats = _G[UIName("achievementFunctions")].categoryAccessor();
 
 	for i in next, categories do
 		categories[i] = nil;
@@ -570,7 +581,7 @@ local function PatchedAchievementFrameCategories_GetCategoryList(categories)
 	local topLevelCategories = {};
 	local childrenByParent = {};
 	for i, id in ipairs(cats) do
-		local _, parent = GetCategoryInfo(id);
+		local _, parent = API.GetCategoryInfo(id);
 		if ( parent == -1 ) then
 			tinsert(topLevelCategories, id);
 		else
@@ -614,8 +625,8 @@ local function ApplyAchievementCategoryListPatch()
 
 	AchievementsFrameCategories_GetCategoryList = PatchedAchievementFrameCategories_GetCategoryList;
 
-	if ACHIEVEMENTUI_CATEGORIES and achievementFunctions and achievementFunctions.categoryAccessor then
-		AchievementsFrameCategories_GetCategoryList(ACHIEVEMENTUI_CATEGORIES);
+	if _G[UIName("ACHIEVEMENTUI_CATEGORIES")] and _G[UIName("achievementFunctions")] and _G[UIName("achievementFunctions")].categoryAccessor then
+		AchievementsFrameCategories_GetCategoryList(_G[UIName("ACHIEVEMENTUI_CATEGORIES")]);
 		InvalidateAchievementStatsUICache();
 		if AchievementsFrameCategories_Update and AchievementsFrameCategoriesContainer and AchievementsFrameCategoriesContainer.buttons then
 			AchievementsFrameCategories_Update();
@@ -637,9 +648,9 @@ local function AddCachedStatisticRow(rows, statisticID, quantity)
 end
 
 local function AddCachedStatisticRows(rows, categoryID)
-	local numStats = GetCategoryNumAchievements(categoryID) or 0;
+	local numStats = API.GetCategoryNumAchievements(categoryID) or 0;
 	for index = 1, numStats do
-		local quantity, skip, statisticID = GetStatistic(categoryID, index);
+		local quantity, skip, statisticID = API.GetStatistic(categoryID, index);
 		if ( not skip and statisticID ) then
 			AddCachedStatisticRow(rows, statisticID, quantity);
 		end
@@ -648,7 +659,7 @@ end
 
 local function BuildStatsChildrenByParent()
 	local childrenByParent = {};
-	for _, category in ipairs(ACHIEVEMENTUI_CATEGORIES or {}) do
+	for _, category in ipairs(_G[UIName("ACHIEVEMENTUI_CATEGORIES")] or {}) do
 		if type(category.id) == "number" and type(category.parent) == "number" then
 			childrenByParent[category.parent] = childrenByParent[category.parent] or {};
 			tinsert(childrenByParent[category.parent], category.id);
@@ -681,8 +692,8 @@ local function BuildCachedStatsRows(categoryID)
 	AddCategoryRows(categoryID);
 	statsUIDisplayCache.category = categoryID;
 	statsUIDisplayCache.version = statsUICacheVersion;
-	if achievementFunctions then
-		achievementFunctions.lastCategory = categoryID;
+	if _G[UIName("achievementFunctions")] then
+		_G[UIName("achievementFunctions")].lastCategory = categoryID;
 	end
 	return rows;
 end
@@ -711,14 +722,14 @@ local function DisplayCachedStatistic(button, row, colorIndex)
 end
 
 local function PatchedAchievementFrameStats_Update()
-	if not achievementFunctions or not AchievementsFrameStatsContainer or not AchievementsFrameStatsContainer.buttons then
+	if not _G[UIName("achievementFunctions")] or not AchievementsFrameStatsContainer or not AchievementsFrameStatsContainer.buttons then
 		return;
 	end
 
-	local category = achievementFunctions.selectedCategory;
+	local category = _G[UIName("achievementFunctions")].selectedCategory;
 	if category == "summary" then
-		category = ACHIEVEMENT_COMPARISON_STATS_SUMMARY_ID;
-		achievementFunctions.selectedCategory = category;
+		category = _G[UIName("ACHIEVEMENT_COMPARISON_STATS_SUMMARY_ID")];
+		_G[UIName("achievementFunctions")].selectedCategory = category;
 	end
 	local rows = statsUIDisplayCache.rows;
 	if statsUIDisplayCache.category ~= category or statsUIDisplayCache.version ~= statsUICacheVersion then
@@ -787,11 +798,11 @@ local function AddComparisonStatisticRow(rows, statisticID, quantity, friendQuan
 end
 
 local function AddComparisonStatisticRows(rows, categoryID)
-	local numStats = GetCategoryNumAchievements(categoryID) or 0;
+	local numStats = API.GetCategoryNumAchievements(categoryID) or 0;
 	for statIndex = 1, numStats do
-		local quantity, skip, statisticID = GetStatistic(categoryID, statIndex);
+		local quantity, skip, statisticID = API.GetStatistic(categoryID, statIndex);
 		if ( not skip and statisticID ) then
-			local friendQuantity = GetComparisonStatistic(statisticID);
+			local friendQuantity = API.GetComparisonStatistic(statisticID);
 			AddComparisonStatisticRow(rows, statisticID, quantity, friendQuantity);
 		end
 	end
@@ -866,14 +877,14 @@ local function DisplayCachedComparisonStatistic(button, row, colorIndex)
 end
 
 local function PatchedAchievementFrameComparison_UpdateStats()
-	if not achievementFunctions or not AchievementsFrameComparisonStatsContainer or not AchievementsFrameComparisonStatsContainer.buttons then
+	if not _G[UIName("achievementFunctions")] or not AchievementsFrameComparisonStatsContainer or not AchievementsFrameComparisonStatsContainer.buttons then
 		return;
 	end
 
-	local category = achievementFunctions.selectedCategory;
+	local category = _G[UIName("achievementFunctions")].selectedCategory;
 	if category == "summary" then
-		category = ACHIEVEMENT_COMPARISON_STATS_SUMMARY_ID;
-		achievementFunctions.selectedCategory = category;
+		category = _G[UIName("ACHIEVEMENT_COMPARISON_STATS_SUMMARY_ID")];
+		_G[UIName("achievementFunctions")].selectedCategory = category;
 	end
 
 	local rows = comparisonStatsUIDisplayCache.rows;
@@ -910,13 +921,13 @@ local function PatchedAchievementFrameComparison_UpdateStats()
 end
 
 local function GetSelectedComparisonAchievementCategory()
-	if not achievementFunctions or achievementFunctions ~= COMPARISON_ACHIEVEMENT_FUNCTIONS then
+	if not _G[UIName("achievementFunctions")] or _G[UIName("achievementFunctions")] ~= _G[UIName("COMPARISON_ACHIEVEMENT_FUNCTIONS")] then
 		return nil;
 	end
 
-	local category = achievementFunctions.selectedCategory;
-	if not category or category == "summary" or category == ACHIEVEMENT_COMPARISON_STATS_SUMMARY_ID then
-		return ACHIEVEMENT_COMPARISON_SUMMARY_ID;
+	local category = _G[UIName("achievementFunctions")].selectedCategory;
+	if not category or category == "summary" or category == _G[UIName("ACHIEVEMENT_COMPARISON_STATS_SUMMARY_ID")] then
+		return _G[UIName("ACHIEVEMENT_COMPARISON_SUMMARY_ID")];
 	end
 	return category;
 end
@@ -994,12 +1005,12 @@ local function ApplyAchievementCriteriaRefreshUIPatch()
 end
 
 local function ApplyAchievementSummaryStatisticSelectionPatch()
-	if achievementSummaryStatisticSelectionPatched or type(AchievementFrame_SelectSummaryStatistic) ~= "function" then
+	if achievementSummaryStatisticSelectionPatched or type(_G[UIName("AchievementFrame_SelectSummaryStatistic")]) ~= "function" then
 		return;
 	end
 
-	local originalSelectSummaryStatistic = AchievementFrame_SelectSummaryStatistic;
-	AchievementFrame_SelectSummaryStatistic = function(...)
+	local originalSelectSummaryStatistic = _G[UIName("AchievementFrame_SelectSummaryStatistic")];
+	_G[UIName("AchievementFrame_SelectSummaryStatistic")] = function(...)
 		local ok, result = pcall(originalSelectSummaryStatistic, ...);
 		if not ok then
 			if Private.DebugMessage then
@@ -1014,7 +1025,7 @@ local function ApplyAchievementSummaryStatisticSelectionPatch()
 end
 
 local function DisplaySummaryAchievement(button, achievementID, incompleteTooltip)
-	local id, name, points, completed, month, day, year, description, flags, icon = GetAchievementInfo(achievementID);
+	local id, name, points, completed, month, day, year, description, flags, icon = API.GetAchievementInfo(achievementID);
 	if not id then
 		return false;
 	end
@@ -1022,7 +1033,7 @@ local function DisplaySummaryAchievement(button, achievementID, incompleteToolti
 	points = tonumber(points) or 0;
 	button.label:SetText(name or "");
 	button.description:SetText(description or "");
-	AchievementShield_SetPoints(points, button.shield.points, GameFontNormal, GameFontNormalSmall);
+	_G[UIName("AchievementShield_SetPoints")](points, button.shield.points, GameFontNormal, GameFontNormalSmall);
 	if ( points > 0 ) then
 		button.shield.icon:SetTexture([[Interface\AchievementFrame\UI-Achievement-Shields]]);
 	else
@@ -1049,12 +1060,12 @@ local function PatchedAchievementFrameSummary_UpdateAchievements(...)
 	local button, anchorTo, achievementID;
 	local defaultAchievementCount = 1;
 
-	for i=1, ACHIEVEMENTUI_MAX_SUMMARY_ACHIEVEMENTS do
+	for i=1, _G[UIName("ACHIEVEMENTUI_MAX_SUMMARY_ACHIEVEMENTS")] do
 		if ( buttons ) then
 			button = buttons[i];
 		end
 		if ( not button ) then
-			button = CreateFrame("Button", "AchievementsFrameSummaryAchievement"..i, AchievementsFrameSummaryAchievements, "SummaryAchievementTemplate");
+			button = CreateFrame("Button", "AchievementsFrameSummaryAchievement"..i, AchievementsFrameSummaryAchievements, UIName("SummaryAchievementTemplate"));
 			if ( i == 1 ) then
 				button:SetPoint("TOPLEFT",AchievementsFrameSummaryAchievementsHeader, "BOTTOMLEFT", 18, 2 );
 				button:SetPoint("TOPRIGHT",AchievementsFrameSummaryAchievementsHeader, "BOTTOMRIGHT", -18, 2 );
@@ -1078,8 +1089,8 @@ local function PatchedAchievementFrameSummary_UpdateAchievements(...)
 			end
 		else
 			button:Hide();
-			for j=defaultAchievementCount, ACHIEVEMENTUI_MAX_SUMMARY_ACHIEVEMENTS do
-				achievementID = ACHIEVEMENTUI_DEFAULTSUMMARYACHIEVEMENTS and ACHIEVEMENTUI_DEFAULTSUMMARYACHIEVEMENTS[defaultAchievementCount];
+			for j=defaultAchievementCount, _G[UIName("ACHIEVEMENTUI_MAX_SUMMARY_ACHIEVEMENTS")] do
+				achievementID = _G[UIName("ACHIEVEMENTUI_DEFAULTSUMMARYACHIEVEMENTS")] and _G[UIName("ACHIEVEMENTUI_DEFAULTSUMMARYACHIEVEMENTS")][defaultAchievementCount];
 				if ( not achievementID ) then
 					break;
 				end
@@ -1097,9 +1108,9 @@ end
 local function PatchedAchievementFrameSummary_Update(isCompare)
 	AchievementsFrameSummaryCategoriesStatusBar_Update();
 	if Achievements.GetSuggestedAchievements then
-		ACHIEVEMENTUI_DEFAULTSUMMARYACHIEVEMENTS = Achievements.GetSuggestedAchievements();
+		_G[UIName("ACHIEVEMENTUI_DEFAULTSUMMARYACHIEVEMENTS")] = Achievements.GetSuggestedAchievements();
 	end
-	AchievementsFrameSummary_UpdateAchievements(GetLatestCompletedAchievements());
+	AchievementsFrameSummary_UpdateAchievements(API.GetLatestCompletedAchievements());
 end
 
 local function ApplyAchievementSummaryUIPatch()
@@ -1116,7 +1127,7 @@ local function ApplyAchievementSummaryUIPatch()
 end
 
 local function LoadNativeAchievementUI()
-	if IsInCombatLockdown() and not AchievementFrame_ToggleAchievementFrame then
+	if IsInCombatLockdown() and not _G[UIName("AchievementFrame_ToggleAchievementFrame")] then
 		nativeAchievementUILoadReason = "IN_COMBAT_LOCKDOWN";
 		return false, nativeAchievementUILoadReason;
 	end
@@ -1129,7 +1140,7 @@ local function LoadNativeAchievementUI()
 	ApplyAchievementSummaryUIPatch();
 	ApplyAchievementComparisonUIPatch();
 
-	if AchievementFrame_ToggleAchievementFrame then
+	if _G[UIName("AchievementFrame_ToggleAchievementFrame")] then
 		nativeAchievementUILoadReason = nil;
 		return true;
 	end
@@ -1142,7 +1153,7 @@ local function LoadNativeAchievementUI()
 end
 
 function Achievements.AchievementFrame_LoadUI()
-	if IsInCombatLockdown() and not AchievementFrame_ToggleAchievementFrame then
+	if IsInCombatLockdown() and not _G[UIName("AchievementFrame_ToggleAchievementFrame")] then
 		nativeAchievementUILoadReason = "IN_COMBAT_LOCKDOWN";
 		return false, nativeAchievementUILoadReason;
 	end
@@ -1154,7 +1165,7 @@ function Achievements.AchievementFrame_LoadUI()
 	ApplyAchievementStatsUIPatch();
 	ApplyAchievementSummaryUIPatch();
 	ApplyAchievementComparisonUIPatch();
-	if AchievementFrame_ToggleAchievementFrame then
+	if _G[UIName("AchievementFrame_ToggleAchievementFrame")] then
 		return true;
 	end
 
@@ -1176,18 +1187,18 @@ function Achievements.ToggleAchievementFrame(showStats)
 	end
 
 	EnsureAchievementMicroButton();
-	if not AchievementFrame_ToggleAchievementFrame then
+	if not _G[UIName("AchievementFrame_ToggleAchievementFrame")] then
 		Achievements.AchievementFrame_LoadUI();
 	end
 
-	if AchievementFrame_ToggleAchievementFrame then
+	if _G[UIName("AchievementFrame_ToggleAchievementFrame")] then
 		ApplyAchievementShieldTexturePatch();
 		ApplyAchievementPlusMinusTexturePatch();
 		ApplyAchievementCategoryListPatch();
 		ApplyAchievementStatsUIPatch();
 		ApplyAchievementSummaryUIPatch();
 		ApplyAchievementComparisonUIPatch();
-		AchievementFrame_ToggleAchievementFrame(showStats);
+		_G[UIName("AchievementFrame_ToggleAchievementFrame")](showStats);
 		Achievements.AchievementMicroButton_Update();
 		ApplyAchievementShieldTexturePatch();
 		ApplyAchievementPlusMinusTexturePatch();

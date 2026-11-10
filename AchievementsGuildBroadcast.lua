@@ -536,6 +536,17 @@ local function HookSetItemRef()
 	-- implementation in Classic raises "Unknown link type" on
 	-- |Hachievement:...| links before any hooksecurefunc callback runs,
 	-- so we must intercept before delegating to the original.
+	if Achievements.IS_FOREVER and LinkUtil and LinkUtil.RegisterLinkHandler and LinkUtil.IsLinkHandlerRegistered and not LinkUtil.IsLinkHandlerRegistered("achievement") then
+		LinkUtil.RegisterLinkHandler("achievement", function(link, text, _, contextData)
+			local fields = SplitAchievementLinkFields(link);
+			if fields and #fields <= 5 and HandleAchievementLinkClick(link, text, contextData and contextData.button) then
+				return LinkProcessorResponse.Handled;
+			end
+			return LinkProcessorResponse.Unhandled;
+		end);
+		hookedSetItemRef = true;
+		return;
+	end
 	local original = _G.SetItemRef;
 	_G.SetItemRef = function(linkData, fullLink, button, chatFrame, ...)
 		if HandleAchievementLinkClick(linkData, fullLink, button) then

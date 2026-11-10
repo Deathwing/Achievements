@@ -4,6 +4,7 @@ if not Achievements then
 end
 
 local Private = Achievements.private;
+local GetCoinTextureString = GetCoinTextureString or (rawget(_G, "AchievementsForeverCompat") or {}).GetCoinTextureString;
 local data = Private.data;
 local ACHIEVEMENT_DATA = data.achievements;
 local CRITERIA_DATA = data.criteria;
@@ -250,9 +251,8 @@ local function BuildStatisticQuantityString(statistic, quantity, criteriaTreeID,
 		return "--";
 	end
 
-	local getCoinTextureString = rawget(_G, "GetCoinTextureString");
-	if CriteriaTreeHasFlag(criteriaTreeID, CRITERIA_TREE_FLAG_IS_MONEY) and getCoinTextureString then
-		return getCoinTextureString(quantity);
+	if CriteriaTreeHasFlag(criteriaTreeID, CRITERIA_TREE_FLAG_IS_MONEY) and GetCoinTextureString then
+		return GetCoinTextureString(quantity);
 	end
 
 	local dateFunction = rawget(_G, "date");

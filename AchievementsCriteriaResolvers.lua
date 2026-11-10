@@ -4,6 +4,10 @@ if not Achievements then
 end
 
 local Private = Achievements.private;
+local API = {};
+for _, name in ipairs({ "GetItemInfo", "GetItemInfoInstant", "GetSpellInfo", "UnitAura", "GetNumFactions", "GetFactionInfo", "GetFactionInfoByID", "ExpandFactionHeader", "CollapseFactionHeader", "GetQuestsCompleted", "GetNumSkillLines", "GetSkillLineInfo", "GetNumBankSlots", "GetNumRaidMembers", "GetNumPartyMembers", "UnitIsMounted" }) do
+	API[name] = rawget(_G, name) or (rawget(_G, "AchievementsForeverCompat") or {})[name];
+end
 local data = Private.data;
 local ACHIEVEMENT_DATA = data.achievements;
 local CRITERIA_DATA = data.criteria;
@@ -709,14 +713,14 @@ end
 
 function Resolvers.BuildPlayerAuraSnapshot(unit)
 	local snapshot = { spellIDs = {}, names = {} };
-	if not UnitAura then
+	if not API.UnitAura then
 		return snapshot;
 	end
 	unit = unit or "player";
 	for filterIndex = 1, 2 do
 		local filter = filterIndex == 1 and "HELPFUL" or "HARMFUL";
 		for auraIndex = 1, 40 do
-			local name, _, _, _, _, _, _, _, _, auraSpellID = UnitAura(unit, auraIndex, filter);
+			local name, _, _, _, _, _, _, _, _, auraSpellID = API.UnitAura(unit, auraIndex, filter);
 			if not name then
 				break;
 			end
@@ -1105,8 +1109,19 @@ local function BuildSkillLineCache()
 	end
 
 	local cache = {};
-	for skillIndex = 1, GetNumSkillLines() do
-		local skillName, isHeader, _, skillRank, _, skillModifier, skillMaxRank = GetSkillLineInfo(skillIndex);
+	if Achievements.IS_FOREVER and C_SkillInfo and C_SkillInfo.GetSkillLineInfoByID then
+		for skillLineID in pairs(skillLines) do
+			local ok, info = pcall(C_SkillInfo.GetSkillLineInfoByID, skillLineID);
+			if ok and type(info) == "table" and not info.isHeader and ((info.rank or 0) > 0 or (info.maxRank or 0) > 0) then
+				cache[skillLineID] = {
+					rank = (info.rank or 0) + (info.modifier or 0),
+					maxRank = info.maxRank or 0,
+				};
+			end
+		end
+	end
+	for skillIndex = 1, API.GetNumSkillLines() do
+		local skillName, isHeader, _, skillRank, _, skillModifier, skillMaxRank = API.GetSkillLineInfo(skillIndex);
 		if skillName and not isHeader then
 			local normalizedSkillName = string.lower(skillName);
 			local skillLineID = byName[normalizedSkillName];
@@ -1163,7 +1178,7 @@ local function GetFactionStateByID(factionID)
 		return nil;
 	end
 
-	local name, _, standingID, barMin, barMax, barValue = GetFactionInfoByID(factionID);
+	local name, _, standingID, barMin, barMax, barValue = API.GetFactionInfoByID(factionID);
 	if not name then
 		return nil;
 	end
@@ -1178,10 +1193,10 @@ local function GetFactionStateByID(factionID)
 end
 
 local function RestoreCollapsedFactionHeaders(collapsedHeaders)
-	for factionIndex = GetNumFactions(), 1, -1 do
-		local name, _, _, _, _, _, _, _, isHeader, isCollapsed = GetFactionInfo(factionIndex);
+	for factionIndex = API.GetNumFactions(), 1, -1 do
+		local name, _, _, _, _, _, _, _, isHeader, isCollapsed = API.GetFactionInfo(factionIndex);
 		if name and isHeader and not isCollapsed and collapsedHeaders[name] then
-			CollapseFactionHeader(factionIndex);
+			API.CollapseFactionHeader(factionIndex);
 		end
 	end
 end
@@ -1189,18 +1204,18 @@ end
 local function BuildFactionCountCache()
 	local collapsedHeaders = {};
 	local factionIndex = 1;
-	while factionIndex <= GetNumFactions() do
-		local name, _, _, _, _, _, _, _, isHeader, isCollapsed = GetFactionInfo(factionIndex);
+	while factionIndex <= API.GetNumFactions() do
+		local name, _, _, _, _, _, _, _, isHeader, isCollapsed = API.GetFactionInfo(factionIndex);
 		if name and isHeader and isCollapsed then
 			collapsedHeaders[name] = true;
-			ExpandFactionHeader(factionIndex);
+			API.ExpandFactionHeader(factionIndex);
 		end
 		factionIndex = factionIndex + 1;
 	end
 
 	local counts = { honored = 0, revered = 0, exalted = 0, encountered = 0 };
-	for factionIndex = 1, GetNumFactions() do
-		local name, _, standingID, _, _, _, _, _, isHeader, _, hasRep = GetFactionInfo(factionIndex);
+	for factionIndex = 1, API.GetNumFactions() do
+		local name, _, standingID, _, _, _, _, _, isHeader, _, hasRep = API.GetFactionInfo(factionIndex);
 		if name and (not isHeader or hasRep) and standingID and standingID > 0 then
 			counts.encountered = counts.encountered + 1;
 			if standingID >= 6 then
@@ -1697,12 +1712,12 @@ local function GetCompletedQuestLookup()
 		return completedQuestLookupCache;
 	end
 
-	if not GetQuestsCompleted then
+	if not API.GetQuestsCompleted then
 		return nil;
 	end
 
 	local completedQuests = {};
-	GetQuestsCompleted(completedQuests);
+	API.GetQuestsCompleted(completedQuests);
 	completedQuestLookupCache = completedQuests;
 	return completedQuestLookupCache;
 end
@@ -2134,7 +2149,7 @@ local function BuildInventorySlotItemContext(inventorySlot, criteriaSlot)
 	local link = GetInventoryItemLink("player", inventorySlot);
 	if not link then return nil, "empty-slot"; end
 	local itemID = type(link) == "string" and tonumber(string.match(link, "item:(%d+)")) or nil;
-	local _, _, quality, ilvl = GetItemInfo(link);
+	local _, _, quality, ilvl = API.GetItemInfo(link);
 	local itemRecord = itemID and ITEM_DATA[itemID];
 	return {
 		slot = criteriaSlot,
@@ -3178,7 +3193,7 @@ local function ExtractItemIDFromItemInfo(itemInfo)
 	if ok and itemID then
 		return itemID;
 	end
-	ok, itemID = pcall(GetItemInfoInstant, itemInfo);
+	ok, itemID = pcall(API.GetItemInfoInstant, itemInfo);
 	if ok and itemID then
 		return itemID;
 	end
@@ -3192,7 +3207,7 @@ local function ExtractItemIDFromItemInfo(itemInfo)
 	end
 	if not itemLink then
 		linkOK, result = pcall(function()
-			return select(2, GetItemInfo(itemInfo));
+			return select(2, API.GetItemInfo(itemInfo));
 		end);
 		if linkOK then
 			itemLink = result;
@@ -3253,6 +3268,15 @@ local ENVIRONMENTAL_TYPE_TO_ASSET = {
 local lastEnvironmentalDamageType = nil;
 local lastEnvironmentalDamageAt = 0;
 local ENVIRONMENTAL_DAMAGE_DEATH_WINDOW = 5; -- seconds
+
+function Resolvers.RecordEnvironmentalDamage(environmentalType)
+	if type(environmentalType) ~= "string" or not ENVIRONMENTAL_TYPE_TO_ASSET[environmentalType] then
+		return false;
+	end
+	lastEnvironmentalDamageType = environmentalType;
+	lastEnvironmentalDamageAt = GetTime();
+	return true;
+end
 
 function Resolvers.PlayerIsDruidCatForm()
 	local _, classFile = UnitClass("player");
@@ -3794,14 +3818,14 @@ end
 
 function Resolvers.PlayerHasAuraSpell(spellID)
 	spellID = tonumber(spellID) or 0;
-	if spellID == 0 or not UnitAura then
+	if spellID == 0 or not API.UnitAura then
 		return nil;
 	end
 
 	for filterIndex = 1, 2 do
 		local filter = filterIndex == 1 and "HELPFUL" or "HARMFUL";
 		for auraIndex = 1, 40 do
-			local name, _, _, _, _, _, _, _, _, auraSpellID = UnitAura("player", auraIndex, filter);
+			local name, _, _, _, _, _, _, _, _, auraSpellID = API.UnitAura("player", auraIndex, filter);
 			if not name then
 				break;
 			end
@@ -3899,7 +3923,7 @@ local SOUL_OF_IRON_ACHIEVEMENT_BOSS_NPCS = {
 local function BuildAuraNameLookup(spellIDs, fallbackNames)
 	local names = {};
 	for _, spellID in ipairs(spellIDs) do
-		local name = GetSpellInfo(spellID);
+		local name = API.GetSpellInfo(spellID);
 		if type(name) == "string" and name ~= "" then
 			names[name] = true;
 		end
@@ -3962,7 +3986,7 @@ local function PlayerHasAnyAuraSpellOrName(spellIDs, cacheField, buildNameLookup
 	for filterIndex = 1, 2 do
 		local filter = filterIndex == 1 and "HELPFUL" or "HARMFUL";
 		for auraIndex = 1, 40 do
-			local name = UnitAura("player", auraIndex, filter);
+			local name = API.UnitAura("player", auraIndex, filter);
 			if not name then
 				break;
 			end
@@ -4455,6 +4479,10 @@ function Resolvers.GetArenaRating(teamSize, personal)
 		end
 	end
 
+	if type(GetArenaTeam) ~= "function" then
+		return nil;
+	end
+
 	local maxTeams = MAX_ARENA_TEAMS or 3;
 	for teamIndex = 1, maxTeams do
 		local values = { GetArenaTeam(teamIndex) };
@@ -4877,7 +4905,7 @@ function Resolvers.RecordLootAcquisitionCriteria(message)
 			local itemID = ExtractItemIDFromLink(itemLink);
 			local itemRecord = itemID and ITEM_DATA[itemID] or nil;
 			local itemQuality, itemLevel;
-			local _, _, quality, level = GetItemInfo(itemLink);
+			local _, _, quality, level = API.GetItemInfo(itemLink);
 			itemQuality = quality;
 			itemLevel = level;
 			local ctx = {
@@ -5148,7 +5176,7 @@ function Resolvers.RecordVendorItemSale(bagID, slotID)
 	end
 	local quantity = GetContainerItemCountCompat(bagID, slotID) or 1;
 	local vendorPrice = 0;
-	local sellPrice = select(11, GetItemInfo(itemID));
+	local sellPrice = select(11, API.GetItemInfo(itemID));
 	vendorPrice = tonumber(sellPrice) or 0;
 	if vendorPrice <= 0 then
 		return false;
@@ -5239,7 +5267,7 @@ end
 
 function Resolvers.ResolveBankSlotsPurchased(context)
 	local requiredQuantity = context.requiredQuantity or GetRequiredQuantity(context.criteriaTree);
-	local bankSlots = GetNumBankSlots();
+	local bankSlots = API.GetNumBankSlots();
 	local quantity = tonumber(bankSlots) or 0;
 	quantity = ApplySavedProgressQuantity(context, quantity, requiredQuantity);
 	return BuildResult(quantity >= requiredQuantity, quantity, requiredQuantity, nil, "bank-slots");
@@ -5392,9 +5420,13 @@ function Resolvers.HookSimpleActionCriteria()
 			Resolvers.RecordSimpleCriteria(CRITERIA_TYPE.ROLL_ANY_DISENCHANT, "roll-disenchant");
 		end
 	end);
-	Resolvers.HookGlobalFunction("AbandonQuest", function()
+	if not Resolvers.HookGlobalFunction("AbandonQuest", function()
 		Resolvers.RecordSimpleCriteria(CRITERIA_TYPE.ABANDON_ANY_QUEST, "abandon-quest");
-	end);
+	end) then
+		Resolvers.HookTableFunction(C_QuestLog, "AbandonQuest", function()
+			Resolvers.RecordSimpleCriteria(CRITERIA_TYPE.ABANDON_ANY_QUEST, "abandon-quest");
+		end);
+	end
 	Resolvers.HookGlobalFunction("TakeTaxiNode", function(nodeID)
 		Resolvers.RecordTaxiMoneySpent(nodeID);
 		Resolvers.RecordSimpleCriteria(CRITERIA_TYPE.BUY_TAXI, "buy-taxi");
@@ -5409,22 +5441,43 @@ function Resolvers.HookSimpleActionCriteria()
 		Resolvers.HookGlobalFunction("StartAuction", function()
 			Resolvers.RecordAuctionPosted();
 		end);
+	else
+		Resolvers.HookTableFunction(C_AuctionHouse, "PostItem", function()
+			Resolvers.RecordAuctionPosted();
+		end);
+		Resolvers.HookTableFunction(C_AuctionHouse, "PostCommodity", function()
+			Resolvers.RecordAuctionPosted();
+		end);
 	end
-	Resolvers.HookGlobalFunction("PlaceAuctionBid", function(_, _, bidAmount)
+	if not Resolvers.HookGlobalFunction("PlaceAuctionBid", function(_, _, bidAmount)
 		Resolvers.RecordAuctionBid(bidAmount);
-	end);
+	end) then
+		Resolvers.HookTableFunction(C_AuctionHouse, "PlaceBid", function(_, bidAmount)
+			Resolvers.RecordAuctionBid(bidAmount);
+		end);
+	end
 	Resolvers.HookGlobalFunction("TakeInboxMoney", function(index)
 		Resolvers.RecordMailboxAuctionCriteria(index);
 	end);
 	Resolvers.HookGlobalFunction("TakeInboxItem", function(index)
 		Resolvers.RecordMailboxAuctionCriteria(index);
 	end);
-	Resolvers.HookGlobalFunction("ConfirmSummon", function()
+	if not Resolvers.HookGlobalFunction("ConfirmSummon", function()
 		Resolvers.RecordSimpleCriteria(CRITERIA_TYPE.ACCEPT_SUMMON, "accept-summon");
-	end);
+	end) then
+		Resolvers.HookTableFunction(C_SummonInfo, "ConfirmSummon", function()
+			Resolvers.RecordSimpleCriteria(CRITERIA_TYPE.ACCEPT_SUMMON, "accept-summon");
+		end);
+	end
 	if BuyBankSlot then
 		Resolvers.HookGlobalFunction("BuyBankSlot", function()
 			Resolvers.RecordSimpleCriteria(CRITERIA_TYPE.BANK_SLOTS_PURCHASED, "bank-slot");
+		end);
+	else
+		Resolvers.HookTableFunction(C_Bank, "PurchaseBankTab", function(bankType)
+			if bankType == nil or not Enum or not Enum.BankType or bankType == Enum.BankType.Character then
+				Resolvers.RecordSimpleCriteria(CRITERIA_TYPE.BANK_SLOTS_PURCHASED, "bank-slot");
+			end
 		end);
 	end
 	return true;
@@ -5597,8 +5650,8 @@ function Resolvers.CacheTargetFacts(guid, unit, flags, creatureID)
 		if level and level > 0 then
 			facts.level = level;
 		end
-		if UnitIsMounted then
-			facts.isMounted = UnitIsMounted(unit) == true;
+		if API.UnitIsMounted then
+			facts.isMounted = API.UnitIsMounted(unit) == true;
 		end
 		local creatureTypeName = UnitCreatureType(unit);
 		facts.creatureTypeName = creatureTypeName or facts.creatureTypeName;
@@ -5787,10 +5840,10 @@ function Resolvers.GetCurrentGroupSize()
 		return count;
 	end
 	if IsInRaid() then
-		return GetNumRaidMembers and (tonumber(GetNumRaidMembers()) or 0) or 40;
+		return API.GetNumRaidMembers and (tonumber(API.GetNumRaidMembers()) or 0) or 40;
 	end
 	if IsInGroup() then
-		return GetNumPartyMembers and ((tonumber(GetNumPartyMembers()) or 0) + 1) or 2;
+		return API.GetNumPartyMembers and ((tonumber(API.GetNumPartyMembers()) or 0) + 1) or 2;
 	end
 	return 1;
 end
@@ -6387,8 +6440,8 @@ MODIFIER_LEAF_DECODERS[11] = function(ctx, asset)
 		if ctx.targetIsMounted ~= nil then
 			return ctx.targetIsMounted == true;
 		end
-		if ctx.targetUnit and UnitIsMounted then
-			return UnitIsMounted(ctx.targetUnit) and true or false;
+		if ctx.targetUnit and API.UnitIsMounted then
+			return API.UnitIsMounted(ctx.targetUnit) and true or false;
 		end
 		return false;
 	end
@@ -7156,6 +7209,9 @@ end
 
 
 local function HandleCombatLogCriteria()
+	if type(CombatLogGetCurrentEventInfo) ~= "function" then
+		return;
+	end
 	local _, subevent, _, sourceGUID, _, sourceFlags, _, destGUID, _, destFlags, _, eventArg1, _, _, eventArg4, eventArg5 = CombatLogGetCurrentEventInfo();
 
 	-- Soul of Iron Naxx tracking is the only consumer that cares about lines
@@ -8164,6 +8220,10 @@ Achievements.ResolveCriteriaTree = Resolvers.ResolveCriteriaTree;
 Achievements.RegisterQuestAreaQuests = Resolvers.RegisterQuestAreaQuests;
 Achievements.RegisterQuestSortQuests = Resolvers.RegisterQuestSortQuests;
 Achievements.HandleCombatLogCriteria = HandleCombatLogCriteria;
+Resolvers.RecordCombatCriteriaAsset = RecordCombatCriteriaAsset;
+Resolvers.BuildKillCombatContext = BuildKillCombatContext;
+Resolvers.GetCreatureIDFromGUID = GetCreatureIDFromGUID;
+Resolvers.GetProgressCharacterName = GetProgressCharacterName;
 Achievements.RecordUsedItem = RecordUsedItemID;
 Achievements.RecordPlayerDeath = RecordPlayerDeath;
 Achievements.RecordBattlegroundParticipation = RecordBattlegroundParticipation;

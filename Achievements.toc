@@ -1,9 +1,9 @@
-## Interface: 20506, 11509
+## Interface: 20506, 11509, 16001
 ## Title: Achievements
-## Notes: Blizzard Achievement UI compatibility layer for Classic Era and The Burning Crusade.
+## Notes: Blizzard Achievement UI compatibility layer for Classic Era, The Burning Crusade and World of Warcraft: Forever.
 ## IconTexture: Interface\AddOns\Achievements\Media\logo.png
 ## Author: Deathwing
-## Version: 1.1.0
+## Version: 1.2.0
 ## X-Website: https://github.com/Deathwing/Achievements
 ## X-Repository: https://github.com/Deathwing/Achievements
 ## X-Curse-Project-ID: 1644657
@@ -27,14 +27,23 @@
 ## SavedVariables: AchievementsDB
 ## SavedVariablesPerCharacter: AchievementsCharacterDB
 
+# EMBED_PACKAGE AchievementsData
+# REMOVE_NEXT_LINE
+Data/AchievementsData~Init.lua
 # REMOVE_NEXT_LINE
 Data/AchievementsData_Classic.lua [AllowLoadGameType vanilla]
 # REMOVE_NEXT_LINE
 Data/AchievementsData_TBC.lua [AllowLoadGameType tbc]
 # REMOVE_NEXT_LINE
+Data/AchievementsData_Camelot.lua [AllowLoadGameType camelot][ExcludeLoadGameType standard, classic]
+# REMOVE_NEXT_LINE
 Data/AchievementsIconAssets.lua
+# REMOVE_NEXT_LINE
+Data/AchievementsData~Finalizer.lua
+AchievementsForeverCompat.lua [AllowLoadGameType camelot][ExcludeLoadGameType standard, classic]
 Achievements.lua
 AchievementsCriteriaResolvers.lua
+AchievementsForeverCriteria.lua [AllowLoadGameType camelot][ExcludeLoadGameType standard, classic]
 AchievementsCriteria.lua
 AchievementsMicroButton.lua
 AchievementsChatLinks.lua
@@ -48,6 +57,7 @@ AchievementsWatchFrame.lua
 AchievementsBootstrap.lua
 AchievementsAPI.lua
 
+
 Vanilla/Blizzard_AchievementUI/Blizzard_AchievementUI.lua [AllowLoadGameType vanilla]
 Vanilla/Blizzard_AchievementUI/Blizzard_AchievementUI_Shared.lua [AllowLoadGameType vanilla]
 Vanilla/Blizzard_AchievementUI/Blizzard_AchievementUI.xml [AllowLoadGameType vanilla]
@@ -57,3 +67,8 @@ TBC/Blizzard_AchievementUI/Blizzard_AchievementUI.lua [AllowLoadGameType tbc]
 TBC/Blizzard_AchievementUI/Blizzard_AchievementUI_Shared.lua [AllowLoadGameType tbc]
 TBC/Blizzard_AchievementUI/Blizzard_AchievementUI.xml [AllowLoadGameType tbc]
 TBC/Blizzard_AchievementUI/Localization.lua [AllowLoadGameType tbc]
+
+Forever/Blizzard_AchievementUI/Blizzard_AchievementUI.lua [AllowLoadGameType camelot][ExcludeLoadGameType standard, classic]
+Forever/Blizzard_AchievementUI/Blizzard_AchievementUI_Shared.lua [AllowLoadGameType camelot][ExcludeLoadGameType standard, classic]
+Forever/Blizzard_AchievementUI/Blizzard_AchievementUI.xml [AllowLoadGameType camelot][ExcludeLoadGameType standard, classic]
+Forever/Blizzard_AchievementUI/Localization.lua [AllowLoadGameType camelot][ExcludeLoadGameType standard, classic]

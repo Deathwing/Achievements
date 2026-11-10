@@ -1,15 +1,18 @@
 # Achievements
 
-Achievements brings a Blizzard-style achievement system to World of Warcraft Classic Era and The Burning Crusade clients. It adds the achievement frame, statistics, achievement tracking, completion toasts, chat links, title rewards, social comparison, and a compatibility API for other addons.
+Achievements brings a Blizzard-style achievement system to World of Warcraft Classic Era, The Burning Crusade and World of Warcraft: Forever clients. It adds the achievement frame, statistics, achievement tracking, completion toasts, chat links, title rewards, social comparison, and a compatibility API for other addons.
 
 ## Supported Clients
 
 - Classic Era (`11509`)
 - The Burning Crusade / Anniversary (`20506`)
+- World of Warcraft: Forever (`16001`)
 
-Both clients use achievement UI files bundled with the addon (a per-client copy under `Vanilla/` and `TBC/`). The native load-on-demand `Blizzard_AchievementUI` addon is never loaded: on Classic Era the client blocks it, and on The Burning Crusade loading it from an addon taints Blizzard's protected code and blocks logging out. A chat warning is shown if another addon force-loads `Blizzard_AchievementUI`.
+All clients use achievement UI files bundled with the addon (a per-client copy under `Vanilla/`, `TBC/` and `Forever/`). On Classic Era and The Burning Crusade the native load-on-demand `Blizzard_AchievementUI` addon is never loaded: on Classic Era the client blocks it, and on The Burning Crusade loading it from an addon taints Blizzard's protected code and blocks logging out. A chat warning is shown there if another addon force-loads `Blizzard_AchievementUI`. On Forever, Blizzard's own achievement window stays available next to the bundled one (see [World of Warcraft: Forever](#world-of-warcraft-forever)).
 
 ## Required Addons
+
+Supported clients: Classic Era (1.15), The Burning Crusade Anniversary (2.5) and World of Warcraft: Forever (1.60). On Forever the addon uses its own Forever data set; see [World of Warcraft: Forever](#world-of-warcraft-forever) for the current limitations.
 
 Achievements ships as two addon folders:
 
@@ -23,12 +26,12 @@ Interface/AddOns/Achievements
 Interface/AddOns/AchievementsData
 ```
 
-The bundled release zip includes both folders. A standalone `Achievements` zip expects `AchievementsData` to be installed beside it. If `AchievementsData` is missing, the runtime addon cannot load because it has no achievement data to display or evaluate.
+The bundled release zip (Wago, WoWInterface, GitHub) includes both folders. The CurseForge `Achievements` download carries a copy of the data inside `Achievements/Data/`, so it works on its own; installing the separate `AchievementsData` package next to it is still recommended because that package receives data updates independently; when both are present the newest installed copy is used. The plain `Achievements` zip on GitHub expects `AchievementsData` to be installed beside it and cannot load without it, because it has no achievement data to display or evaluate. `/ach versions` shows which data copy is in use.
 
 ## Quick Start
 
-- Open Achievements from the micro button or with the default keybinding `Y`.
-- Open Statistics with `SHIFT-Y`.
+- Open Achievements from the micro button or with the default keybinding `Y` (`SHIFT-Y` on Forever).
+- Open Statistics with `SHIFT-Y` (`CTRL-Y` on Forever).
 - Shift-click an achievement while a chat box is open to insert a clickable achievement link.
 - Use the normal quest-watch tracking modifier on an achievement to track or untrack it on screen.
 - Right-click another friendly player and choose `Compare Achievements`, or type `/ach-compare PlayerName`.
@@ -67,7 +70,7 @@ The bundled release zip includes both folders. A standalone `Achievements` zip e
 ## Features
 
 - **Blizzard-style achievement UI**: achievement categories, points, completion dates, criteria, rewards, summary views, and statistics in a familiar frame.
-- **Classic and TBC data sets**: client-specific generated data for achievements, categories, criteria trees, statistics, quests, maps, reputations, factions, items, spells, skills, emotes, titles, and localizations.
+- **Classic, TBC and Forever data sets**: client-specific generated data for achievements, categories, criteria trees, statistics, quests, maps, reputations, factions, items, spells, skills, emotes, titles, and localizations.
 - **Saved progress**: local character progress for supported Classic/TBC criteria, with account-wide storage reserved for account-wide achievement state and shared remote snapshots.
 - **Completion feedback**: achievement toasts, local chat output, and addon-message achievement broadcasts visible to nearby or guild players running the addon.
 - **Achievement tracking**: track incomplete achievements in a lightweight watch frame that updates alongside the quest tracker.
@@ -75,7 +78,7 @@ The bundled release zip includes both folders. A standalone `Achievements` zip e
 - **Player comparison**: compare achievements and statistics with another player running the addon through the right-click player menu or `/ach-compare`.
 - **Armory-style snapshots**: fetch and store achievement snapshots from a player or from addon users in the hidden achievements channel with `/ach-fetch`.
 - **Achievement title rewards**: earned title rewards can be selected from the Character frame or `/ach-title`; selected addon titles are shared with nearby addon users through group, guild, and addon-channel messages.
-- **Retail-style API compatibility**: exposes familiar functions such as `GetAchievementInfo`, `GetAchievementCriteriaInfo`, `GetAchievementLink`, `GetStatistic`, `AddTrackedAchievement`, `RemoveTrackedAchievement`, comparison APIs, and achievement frame toggles for addon compatibility.
+- **Retail-style API compatibility**: exposes familiar functions such as `GetAchievementInfo`, `GetAchievementCriteriaInfo`, `GetAchievementLink`, `GetStatistic`, `AddTrackedAchievement`, `RemoveTrackedAchievement`, comparison APIs, and achievement frame toggles for addon compatibility. On Forever these globals stay Blizzard's native API and the addon's versions are available as `Achievements.<name>`.
 - **Data-only updates**: generated data and icon updates can be released through `AchievementsData` without replacing the runtime addon.
 
 ## Slash Commands
@@ -98,9 +101,9 @@ Support/debug commands also exist for troubleshooting, but they are not needed f
 
 ## Data and Localization
 
-The companion `AchievementsData` addon is generated from 3.4.5.63697 data and filtered for the supported clients:
+The companion `AchievementsData` addon is generated from 3.4.5.63697 data (plus Forever's own game tables for World of Warcraft: Forever) and filtered for the supported clients:
 
-- Classic Era: 386 achievements and 177 statistics.
+- Classic Era: 383 achievements and 177 statistics.
 - The Burning Crusade: 643 achievements and 254 statistics.
 - Included localizations: `deDE`, `esES`, `esMX`, `frFR`, `koKR`, `ptBR`, `ruRU`, `zhCN`, and `zhTW`.
 
@@ -109,6 +112,18 @@ Runtime localization overlays are applied from `AchievementsData` based on your 
 The override only affects generated achievement content, such as achievement names, descriptions, criteria, categories, and rewards. Blizzard-owned window labels, tabs, buttons, tooltips, and date formats remain in the WoW client language. Missing fields in a partial localization continue to use the English base data.
 
 Achievement tracking is unaffected by the override. Where the addon has to match generated text against text the game client produces, such as skill and profession names, battleground zone and faction names, readable-object titles, targeted emote names, and incoming achievement chat links, it always matches against the client-language text.
+
+## World of Warcraft: Forever
+
+Forever (interface `16001`) runs the Mainline (retail) API rather than the Classic one. There is no separate Forever manifest: the Forever-only lines in the shared `Achievements.toc` are gated with `[AllowLoadGameType camelot][ExcludeLoadGameType standard, classic]` because older clients do not know the `camelot` game type and would otherwise load them. On Forever the manifest loads `AchievementsForeverCompat.lua` first to restore the Classic-era functions the addon calls (item, spell, aura, reputation, skill and quest lookups), then the regular addon files, `AchievementsForeverCriteria.lua` (the Forever replacement for the combat-log driven tracking, see below) and the `Forever/` copy of the bundled achievement window. Forever has its own generated data set, `AchievementsData_Camelot.lua`, built from Forever's game tables with the Classic Era achievement definitions; quest zone data comes from QuestieDB's Forever database, which is currently a converted Classic Era baseline, so quests that only exist on Forever are not yet counted by zone-based quest criteria.
+
+Forever's Legacy system is built on Blizzard's own achievement API and achievement window, so on Forever the addon leaves those untouched: it does not replace the native achievement functions, and its bundled window is fully namespaced so both can be open in the same session. The default keys move up one modifier there because Blizzard binds `Y` to the Legacy window: the addon's shipped `Y` default would take that key, so a one-time migration moves it to `SHIFT-Y` for achievements and `CTRL-Y` for statistics and gives `Y` back to the Legacy window (once per binding set, and only while the addon's bindings are still at their shipped defaults, the Legacy window has no key and `CTRL-Y` is free). The achievement micro button sits in the micro menu as on other clients, and `/ach` works as usual.
+
+Known limitations:
+
+- Forever closes the combat log to addons, so the addon tracks combat criteria from other signals instead: creature kills from encounter results, from tapped creatures it can see dying (target, focus, their targets, mouseover, nameplates), from looted corpses and from experience-gain messages; honorable kills from honor-gain messages; spells you cast from your own cast events; damage dealt and healing done from Blizzard's damage meter after each fight; damage and healing taken from your own combat text; and deaths to creatures, players or the environment from the death recap. Kills credited from a name-only signal count once per creature name within a few seconds, so AoE farming of identical mobs can undercount.
+- Still not trackable on Forever: killing blows (including killing blows by class or race), the longest fall survived, the largest single hit dealt and largest heal cast, and "spell cast on you" criteria that are not auras (resurrections). These stay at their saved progress.
+- Arena team and PvP rank criteria have no Forever equivalent yet and stay unresolved.
 
 ## Community
 
