@@ -63,6 +63,10 @@ RegisterEventSafe("PLAYER_MONEY");
 if type(CombatLogGetCurrentEventInfo) == "function" then
 	RegisterEventSafe("COMBAT_LOG_EVENT_UNFILTERED");
 end
+-- Forever counts honor kills in AchievementsForeverCriteria.lua.
+if not Achievements.IS_FOREVER then
+	RegisterEventSafe("CHAT_MSG_COMBAT_HONOR_GAIN");
+end
 RegisterEventSafe("PLAYER_DEAD");
 RegisterEventSafe("PLAYER_PVP_RANK_CHANGED");
 RegisterEventSafe("UPDATE_BATTLEFIELD_STATUS");
@@ -150,6 +154,13 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1, arg2, arg3, arg4, arg5)
 	if event == "COMBAT_LOG_EVENT_UNFILTERED" then
 		if Achievements.HandleCombatLogCriteria then
 			Achievements.HandleCombatLogCriteria();
+		end
+		return;
+	end
+
+	if event == "CHAT_MSG_COMBAT_HONOR_GAIN" then
+		if Achievements.RecordHonorGainCriteria then
+			Achievements.RecordHonorGainCriteria(arg1);
 		end
 		return;
 	end
@@ -461,7 +472,7 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1, arg2, arg3, arg4, arg5)
 			Achievements.RecordWorldStateScan();
 		end
 		if Achievements.BackfillCurrentState then
-			Achievements.BackfillCurrentState();
+			Achievements.BackfillCurrentState(arg2 == true);
 		else
 			Achievements.RefreshCriteriaAchievements(false);
 		end

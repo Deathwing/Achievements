@@ -721,13 +721,14 @@ function Resolvers.BuildPlayerAuraSnapshot(unit)
 		local filter = filterIndex == 1 and "HELPFUL" or "HARMFUL";
 		for auraIndex = 1, 40 do
 			local name, _, _, _, _, _, _, _, _, auraSpellID = API.UnitAura(unit, auraIndex, filter);
-			if not name then
+			local nameSecret = Private.IsSecret(name);
+			if not nameSecret and not name then
 				break;
 			end
-			if type(name) == "string" and name ~= "" then
+			if not nameSecret and type(name) == "string" and name ~= "" then
 				snapshot.names[name] = true;
 			end
-			auraSpellID = tonumber(auraSpellID) or 0;
+			auraSpellID = not Private.IsSecret(auraSpellID) and tonumber(auraSpellID) or 0;
 			if auraSpellID ~= 0 then
 				snapshot.spellIDs[auraSpellID] = true;
 			end
@@ -855,6 +856,13 @@ end
 
 function Resolvers.GetFactionFromStableAssetText(text)
 	local sourceText = Resolvers.LocaleLower(text);
+	-- Widget icons are named <owner>_icon_<flag>, e.g. horde_icon_alliance_flag.
+	local owner = string.match(sourceText, "^%s*(%a+)_icon_");
+	if owner == "alliance" then
+		return "Alliance";
+	elseif owner == "horde" then
+		return "Horde";
+	end
 	if string.find(sourceText, "alliance", 1, true) or string.find(sourceText, "stormpike", 1, true) or string.find(sourceText, "silverwing", 1, true) then
 		return "Alliance";
 	elseif string.find(sourceText, "horde", 1, true) or string.find(sourceText, "frostwolf", 1, true) or string.find(sourceText, "warsong", 1, true) then
@@ -1651,6 +1659,26 @@ function Resolvers.RecordCriteriaFail(failEvent, assetID)
 	return recorded;
 end
 
+-- Clears battle progress as leaving would, also when the leave was never seen (logout, crash, transfer).
+function Resolvers.ResetBattleScopedCriteria(mapID)
+	local reset = false;
+	for _, criteria in ipairs(Resolvers.GetCriteriaByStartEvent(CRITERIA_START_EVENT.START_BATTLEGROUND)) do
+		if Resolvers.IsClientRecordableCriteria(criteria)
+			and criteria.failEvent == CRITERIA_FAIL_EVENT.LEAVE_BATTLEGROUND
+			and Resolvers.EventAssetMatches(criteria.startAsset, mapID)
+			and Resolvers.EventAssetMatches(criteria.failAsset, mapID)
+		then
+			local achievementID = data.achievementByCriteria[criteria.id];
+			if achievementID and Resolvers.HasCriteriaFlag(criteria, CRITERIA_FLAGS.FAIL_ACHIEVEMENT) then
+				reset = Resolvers.ResetAchievementCriteriaProgress(achievementID) or reset;
+			else
+				reset = Resolvers.ResetCriteriaProgress(criteria.id) or reset;
+			end
+		end
+	end
+	return reset;
+end
+
 local function BuildResult(completed, quantity, requiredQuantity, characterName, source, eligible, statLabel)
 	requiredQuantity = requiredQuantity or 1;
 	quantity = quantity or 0;
@@ -2000,6 +2028,10 @@ local function ResolveAssetCounter(context, sourceLabel)
 	local criteria = context.criteria;
 	local requiredQuantity = context.requiredQuantity or GetRequiredQuantity(context.criteriaTree);
 	if not criteria then
+		return ResolveSavedProgress(context);
+	end
+	-- Conditional criteria count only what passed their conditions; statistics keep the lifetime totals.
+	if Resolvers.UsesPerCriteriaProgress(criteria) and not Private.IsStatisticAchievement(context.achievement) then
 		return ResolveSavedProgress(context);
 	end
 
@@ -2407,8 +2439,6 @@ function Resolvers.RecordArathiScoreText(text, icon, tooltip, expressions, value
 		end
 	end
 	if bases == 5 then expressions[5717] = true; end
-	if points == 1590 then expressions[5715] = true; end
-	if points == 0 then expressions[5716] = true; end
 	Resolvers.ApplyArathiScoreHistory(529, expressions, values);
 end
 
@@ -2423,7 +2453,6 @@ function Resolvers.RecordEyeOfTheStormScoreText(text, icon, tooltip, expressions
 		if points then values[2750] = points; end
 	end
 	if bases == 4 then expressions[5719] = true; end
-	if points == 0 then expressions[5720] = true; end
 end
 
 function Resolvers.RecordWarsongScoreText(text, icon, tooltip, values)
@@ -2443,7 +2472,7 @@ function Resolvers.RecordWarsongScoreText(text, icon, tooltip, values)
 end
 
 function Resolvers.RecordKnownWorldStateText(text, mapID, expressions, values, icon, tooltip)
-	if type(text) ~= "string" or text == "" then
+	if Private.IsSecret(text) or Private.IsSecret(icon) or Private.IsSecret(tooltip) or type(text) ~= "string" or text == "" then
 		return;
 	end
 	if Private.state and Private.state.uiWidgetWorldStateTexts then
@@ -2465,6 +2494,16 @@ function Resolvers.RecordKnownWorldStateText(text, mapID, expressions, values, i
 	end
 end
 
+function Resolvers.GetFirstInfoField(info, ...)
+	for index = 1, select("#", ...) do
+		local value = info[select(index, ...)];
+		if Private.IsSecret(value) or value then
+			return value;
+		end
+	end
+	return nil;
+end
+
 function Resolvers.RecordWorldStateInfoStrings(info, mapID, expressions, values, depth)
 	if type(info) ~= "table" then
 		return;
@@ -2473,8 +2512,8 @@ function Resolvers.RecordWorldStateInfoStrings(info, mapID, expressions, values,
 	if depth > 3 then
 		return;
 	end
-	local icon = info.icon or info.iconTexture or info.atlasName or info.texture or info.textureKit;
-	local tooltip = info.tooltip or info.tooltipText or info.name or info.description;
+	local icon = Resolvers.GetFirstInfoField(info, "icon", "iconTexture", "atlasName", "texture", "textureKit");
+	local tooltip = Resolvers.GetFirstInfoField(info, "tooltip", "tooltipText", "name", "description");
 	for _, value in pairs(info) do
 		if type(value) == "string" then
 			Resolvers.RecordKnownWorldStateText(value, mapID, expressions, values, icon, tooltip);
@@ -2668,11 +2707,37 @@ Resolvers.battlegroundAreaPoiNodes = Resolvers.battlegroundAreaPoiNodes or {
 		{ key = "felReaverRuins", patterns = { "fel reaver ruins" } },
 		{ key = "bloodElfTower", patterns = { "blood elf tower" } },
 	},
-	[30] = {
-		{ key = "irondeep", patterns = { "irondeep" } },
-		{ key = "coldtooth", patterns = { "coldtooth" } },
-	},
 };
+
+-- Alterac Valley area POI id -> { owner world state, owner (1 Alliance, 2 Horde, 0 NPC, false unknown) }.
+Resolvers.alteracAreaPoiWorldStates = Resolvers.alteracAreaPoiWorldStates or {
+	[1099] = { 801, 1 }, [1383] = { 801, 2 }, [1384] = { 801, 0 },
+	[1358] = { 804, 1 }, [1102] = { 804, 2 }, [1359] = { 804, 0 },
+	[1249] = { 1181, 1 }, [1355] = { 1181, 2 }, [1356] = { 1181, false }, [1357] = { 1181, false },
+	[1250] = { 1182, 1 }, [1352] = { 1182, 2 }, [1353] = { 1182, false }, [1354] = { 1182, false },
+	[1251] = { 1183, 1 }, [1380] = { 1183, 2 }, [1381] = { 1183, false }, [1382] = { 1183, false },
+	[1347] = { 1184, 1 }, [1389] = { 1184, 2 }, [1390] = { 1184, false }, [1391] = { 1184, false },
+	[1527] = { 1185, 2 }, [1528] = { 1185, 1 }, [1529] = { 1185, false }, [1530] = { 1185, false },
+	[1255] = { 1186, 2 }, [1362] = { 1186, 1 }, [1363] = { 1186, false }, [1364] = { 1186, false },
+	[1252] = { 1187, 2 }, [1377] = { 1187, 1 }, [1378] = { 1187, false }, [1379] = { 1187, false },
+	[1254] = { 1188, 2 }, [1405] = { 1188, 1 }, [1406] = { 1188, false }, [1407] = { 1188, false },
+};
+
+function Resolvers.RecordAlteracAreaPoiState(areaPoiID, owners)
+	if Private.IsSecret(areaPoiID) then
+		return;
+	end
+	local entry = Resolvers.alteracAreaPoiWorldStates[areaPoiID];
+	if not entry then
+		return;
+	end
+	local worldStateID, owner = entry[1], entry[2];
+	if owners[worldStateID] == nil then
+		owners[worldStateID] = owner;
+	elseif owners[worldStateID] ~= owner then
+		owners[worldStateID] = false;
+	end
+end
 
 function Resolvers.GetWorldStateScanUiMapID(ctx)
 	if type(ctx) == "table" and ctx.uiMapID then
@@ -2822,18 +2887,6 @@ function Resolvers.ApplyAreaPoiNodeOwners(mapID, nodeOwners, expressions, values
 		end
 		if allianceCount == 4 then values[2752] = 4; end
 		if hordeCount == 4 then values[2753] = 4; end
-	elseif mapID == 30 then
-		if nodeOwners.irondeep == "Alliance" and nodeOwners.coldtooth == "Alliance" then
-			expressions[1043] = true;
-			expressions[1057] = true;
-			values[801] = 2;
-			values[804] = 2;
-		elseif nodeOwners.irondeep == "Horde" and nodeOwners.coldtooth == "Horde" then
-			expressions[1041] = true;
-			expressions[1058] = true;
-			values[801] = 1;
-			values[804] = 1;
-		end
 	end
 end
 
@@ -2858,7 +2911,11 @@ function Resolvers.RecordBattlefieldAreaPoiScan(mapID, expressions, values)
 		return;
 	end
 	local nodeOwners = {};
+	local alteracOwners = mapID == 30 and {} or nil;
 	for _, areaPoiID in ipairs(areaPoiIDs) do
+		if alteracOwners then
+			Resolvers.RecordAlteracAreaPoiState(areaPoiID, alteracOwners);
+		end
 		local infoOK, poiInfo = pcall(areaPoi.GetAreaPOIInfo, uiMapID, areaPoiID);
 		if infoOK and type(poiInfo) == "table" then
 			local owner = Resolvers.GetAreaPoiOwner(poiInfo);
@@ -2874,6 +2931,11 @@ function Resolvers.RecordBattlefieldAreaPoiScan(mapID, expressions, values)
 		end
 	end
 	Resolvers.ApplyAreaPoiNodeOwners(mapID, nodeOwners, expressions, values);
+	for worldStateID, owner in pairs(alteracOwners or {}) do
+		if owner ~= false then
+			values[worldStateID] = owner;
+		end
+	end
 	return mapID;
 end
 
@@ -2978,7 +3040,7 @@ function Resolvers.IsWarsongFlagAtBase(ctx, flagFaction)
 end
 
 function Resolvers.RecordBattlegroundWorldStateMessage(message)
-	if type(message) ~= "string" or message == "" then
+	if Private.IsSecret(message) or type(message) ~= "string" or message == "" then
 		return false;
 	end
 	local mapID = Resolvers.GetWorldStateScanMapID();
@@ -3517,7 +3579,7 @@ local function GetDuelOutcomePatterns()
 end
 
 local function RecordDuelOutcomeFromSystemMessage(message)
-	if type(message) ~= "string" or message == "" then
+	if Private.IsSecret(message) or type(message) ~= "string" or message == "" then
 		return false;
 	end
 	local function NormalizeDuelName(name)
@@ -3569,7 +3631,7 @@ local function RecordDuelOutcomeFromSystemMessage(message)
 	return false;
 end
 
-local function RecordBattlegroundParticipation()
+local function RecordBattlegroundParticipation(isReloadingUi)
 	local _, instanceType, _, _, _, _, _, instanceMapID = GetInstanceInfo();
 	instanceMapID = tonumber(instanceMapID);
 
@@ -3578,15 +3640,26 @@ local function RecordBattlegroundParticipation()
 			Resolvers.RecordCriteriaFail(CRITERIA_FAIL_EVENT.LEAVE_BATTLEGROUND, lastBattlegroundMapID);
 		end
 		lastBattlegroundMapID = nil;
+		recentBattlegroundWinMapID = nil;
 		return false;
 	end
 
+	-- A reload stays in the same battle; any other loading screen starts a new one, even on the same map.
+	if isReloadingUi and not lastBattlegroundMapID then
+		lastBattlegroundMapID = instanceMapID;
+		Resolvers.RecordCriteriaStart(CRITERIA_START_EVENT.START_BATTLEGROUND, instanceMapID);
+		return false;
+	end
+	if lastBattlegroundMapID and lastBattlegroundMapID ~= instanceMapID then
+		Resolvers.RecordCriteriaFail(CRITERIA_FAIL_EVENT.LEAVE_BATTLEGROUND, lastBattlegroundMapID);
+	end
+	Resolvers.ResetBattleScopedCriteria(instanceMapID);
+	Resolvers.RecordCriteriaStart(CRITERIA_START_EVENT.START_BATTLEGROUND, instanceMapID);
 	if lastBattlegroundMapID == instanceMapID then
 		return false;
 	end
 	lastBattlegroundMapID = instanceMapID;
 
-	Resolvers.RecordCriteriaStart(CRITERIA_START_EVENT.START_BATTLEGROUND, instanceMapID);
 	Resolvers.IncrementCriteriaAssetProgress(CRITERIA_TYPE.PARTICIPATE_IN_BATTLEGROUND, instanceMapID, 1, nil, GetProgressCharacterName());
 	RecordCriteriaEvent(CRITERIA_TYPE.PARTICIPATE_IN_BATTLEGROUND, instanceMapID, {
 		mapID = instanceMapID,
@@ -3826,10 +3899,10 @@ function Resolvers.PlayerHasAuraSpell(spellID)
 		local filter = filterIndex == 1 and "HELPFUL" or "HARMFUL";
 		for auraIndex = 1, 40 do
 			local name, _, _, _, _, _, _, _, _, auraSpellID = API.UnitAura("player", auraIndex, filter);
-			if not name then
+			if not Private.IsSecret(name) and not name then
 				break;
 			end
-			if auraSpellID == spellID then
+			if not Private.IsSecret(auraSpellID) and auraSpellID == spellID then
 				return true;
 			end
 		end
@@ -3987,10 +4060,11 @@ local function PlayerHasAnyAuraSpellOrName(spellIDs, cacheField, buildNameLookup
 		local filter = filterIndex == 1 and "HELPFUL" or "HARMFUL";
 		for auraIndex = 1, 40 do
 			local name = API.UnitAura("player", auraIndex, filter);
-			if not name then
+			local nameSecret = Private.IsSecret(name);
+			if not nameSecret and not name then
 				break;
 			end
-			if names[name] then
+			if not nameSecret and names[name] then
 				return true;
 			end
 		end
@@ -4236,7 +4310,7 @@ end
 end
 
 function Resolvers.RecordPlayerAuraCriteria(unit)
-	if unit and unit ~= "player" then
+	if Private.IsSecret(unit) or (unit and unit ~= "player") then
 		return false;
 	end
 
@@ -4414,9 +4488,9 @@ function Resolvers.GetCurrencyQuantity(currencyID)
 		return tonumber(info.totalEarned) or tonumber(info.quantity);
 	end
 
-	ok, _, info = pcall(GetCurrencyInfo, currencyID);
-	if ok then
-		return tonumber(info);
+	local legacyOK, _, quantity = pcall(GetCurrencyInfo, currencyID);
+	if legacyOK then
+		return tonumber(quantity);
 	end
 
 	return nil;
@@ -4665,7 +4739,7 @@ function Resolvers.RecordGameObjectTextCriteria(title)
 end
 
 function Resolvers.GetGameObjectIDFromGUID(guid)
-	if type(guid) ~= "string" then
+	if Private.IsSecret(guid) or type(guid) ~= "string" then
 		return nil;
 	end
 
@@ -4677,7 +4751,7 @@ function Resolvers.GetGameObjectIDFromGUID(guid)
 end
 
 function Resolvers.RecordPlayerSpellcast(unit, _, spellID)
-	if unit and unit ~= "player" then
+	if Private.IsSecret(unit) or Private.IsSecret(spellID) or (unit and unit ~= "player") then
 		return false;
 	end
 	spellID = tonumber(spellID) or 0;
@@ -5349,7 +5423,7 @@ function Resolvers.RecordSimpleCriteria(criteriaType, dedupeKey)
 	return recorded;
 end
 
-function Resolvers.BackfillCurrentState()
+function Resolvers.BackfillCurrentState(isReloadingUi)
 	Private.state = Private.state or {};
 	if Private.state.currentStateBackfillRunning then
 		return false;
@@ -5367,7 +5441,7 @@ function Resolvers.BackfillCurrentState()
 		if Achievements.ClearCharacterScanCache then Achievements.ClearCharacterScanCache(); end
 
 		recorded = Resolvers.RecordLoginCriteria() or recorded;
-		recorded = RecordBattlegroundParticipation() or recorded;
+		recorded = RecordBattlegroundParticipation(isReloadingUi) or recorded;
 		recorded = Resolvers.RecordArenaParticipation() or recorded;
 		recorded = Resolvers.RecordInstanceRun() or recorded;
 		recorded = Resolvers.RecordPlayerAuraCriteria("player") or recorded;
@@ -5542,7 +5616,7 @@ local function DestIsPlayer(destGUID, destFlags)
 end
 
 GetCreatureIDFromGUID = function(guid)
-	if type(guid) ~= "string" then
+	if Private.IsSecret(guid) or type(guid) ~= "string" then
 		return nil;
 	end
 
@@ -5624,7 +5698,7 @@ function Resolvers.GetTargetFactCache()
 end
 
 function Resolvers.CacheTargetFacts(guid, unit, flags, creatureID)
-	if not guid or guid == "" then
+	if Private.IsSecret(guid) or not guid or guid == "" then
 		return nil;
 	end
 	local cache = Resolvers.GetTargetFactCache();
@@ -5645,7 +5719,10 @@ function Resolvers.CacheTargetFacts(guid, unit, flags, creatureID)
 		facts.isPlayer = UnitIsPlayer(unit) == true;
 		facts.raceID = GetTargetRaceID(unit) or facts.raceID;
 		facts.classID = Resolvers.GetTargetClassID(unit) or facts.classID;
-		facts.sex = UnitSex(unit) or facts.sex;
+		local sex = UnitSex(unit);
+		if not Private.IsSecret(sex) then
+			facts.sex = sex or facts.sex;
+		end
 		local level = UnitLevel(unit);
 		if level and level > 0 then
 			facts.level = level;
@@ -5654,6 +5731,9 @@ function Resolvers.CacheTargetFacts(guid, unit, flags, creatureID)
 			facts.isMounted = API.UnitIsMounted(unit) == true;
 		end
 		local creatureTypeName = UnitCreatureType(unit);
+		if Private.IsSecret(creatureTypeName) then
+			creatureTypeName = nil;
+		end
 		facts.creatureTypeName = creatureTypeName or facts.creatureTypeName;
 		facts.creatureTypeID = creatureTypeName and Resolvers.GetCreatureTypeIDFromName(creatureTypeName) or facts.creatureTypeID;
 	end
@@ -5668,7 +5748,7 @@ function Resolvers.CacheTargetFacts(guid, unit, flags, creatureID)
 end
 
 function Resolvers.GetCachedTargetFacts(guid)
-	if not guid or guid == "" then
+	if Private.IsSecret(guid) or not guid or guid == "" then
 		return nil;
 	end
 	local facts = Resolvers.GetTargetFactCache()[guid];
@@ -5683,18 +5763,25 @@ function Resolvers.GetCachedTargetFacts(guid)
 end
 
 local function ResolveUnitTokenForGUID(targetGUID)
-	if not targetGUID or targetGUID == "" then
+	if Private.IsSecret(targetGUID) or not targetGUID or targetGUID == "" then
 		return nil;
 	end
+	local function matches(token)
+		if not UnitExists(token) then
+			return false;
+		end
+		local tokenGUID = UnitGUID(token);
+		return not Private.IsSecret(tokenGUID) and tokenGUID == targetGUID;
+	end
 	for _, token in ipairs(UNIT_TOKEN_CANDIDATES) do
-		if UnitExists(token) and UnitGUID(token) == targetGUID then
+		if matches(token) then
 			return token;
 		end
 	end
 	-- Nameplates: only present on Classic when the unit has a visible plate.
 	for i = 1, 40 do
 		local token = "nameplate" .. i;
-		if UnitExists(token) and UnitGUID(token) == targetGUID then
+		if matches(token) then
 			return token;
 		end
 	end
@@ -5703,7 +5790,7 @@ local function ResolveUnitTokenForGUID(targetGUID)
 		local n = GetNumGroupMembers();
 		for i = 1, n do
 			local token = "raid" .. i .. "target";
-			if UnitExists(token) and UnitGUID(token) == targetGUID then
+			if matches(token) then
 				return token;
 			end
 		end
@@ -5711,7 +5798,7 @@ local function ResolveUnitTokenForGUID(targetGUID)
 		local n = GetNumGroupMembers();
 		for i = 1, n do
 			local token = "party" .. i .. "target";
-			if UnitExists(token) and UnitGUID(token) == targetGUID then
+			if matches(token) then
 				return token;
 			end
 		end
@@ -5747,20 +5834,6 @@ end
 -- type/asset/sec/ter triple (leaf condition).
 -- See: https://wow.tools/dbc/?dbc=ModifierTree
 
-local PLAYABLE_RACE_BIT = {
-	[1] = 0x01,    -- Human
-	[2] = 0x02,    -- Orc
-	[3] = 0x04,    -- Dwarf
-	[4] = 0x08,    -- Night Elf
-	[5] = 0x10,    -- Undead
-	[6] = 0x20,    -- Tauren
-	[7] = 0x40,    -- Gnome
-	[8] = 0x80,    -- Troll
-	[9] = 0x100,   -- Goblin
-	[10] = 0x200,  -- Blood Elf
-	[11] = 0x400,  -- Draenei
-};
-
 local RACE_FILE_TO_ID = {
 	Human = 1, Orc = 2, Dwarf = 3, NightElf = 4, Scourge = 5, Undead = 5,
 	Tauren = 6, Gnome = 7, Troll = 8, Goblin = 9, BloodElf = 10, Draenei = 11,
@@ -5790,6 +5863,9 @@ GetTargetRaceID = function(unit)
 		return nil;
 	end
 	local _, raceFile = UnitRace(unit);
+	if Private.IsSecret(raceFile) then
+		return nil;
+	end
 	return raceFile and RACE_FILE_TO_ID[raceFile] or nil;
 end
 
@@ -5798,7 +5874,21 @@ function Resolvers.GetTargetClassID(unit)
 		return nil;
 	end
 	local _, classFile = UnitClass(unit);
+	if Private.IsSecret(classFile) then
+		return nil;
+	end
 	return classFile and Resolvers.classFileToID[classFile] or nil;
+end
+
+function Resolvers.GetRaceAndClassIDFromGUID(guid)
+	if Private.IsSecret(guid) or type(guid) ~= "string" or string.sub(guid, 1, 7) ~= "Player-" then
+		return nil;
+	end
+	local _, classFile, _, raceFile = GetPlayerInfoByGUID(guid);
+	if Private.IsSecret(classFile) or Private.IsSecret(raceFile) then
+		return nil;
+	end
+	return raceFile and RACE_FILE_TO_ID[raceFile] or nil, classFile and Resolvers.classFileToID[classFile] or nil;
 end
 
 GetCurrentMapID = function()
@@ -5812,6 +5902,86 @@ end
 
 GetCurrentZoneAreaID = function()
 	return C_Map.GetBestMapForUnit("player");
+end
+
+function Resolvers.GetAreaZoneID(areaID)
+	local areas = data.areas or {};
+	for _ = 1, 8 do
+		local area = areas[areaID];
+		if not area then
+			return nil;
+		end
+		if (tonumber(area.parent) or 0) == 0 then
+			return areaID;
+		end
+		areaID = tonumber(area.parent);
+	end
+	return nil;
+end
+
+function Resolvers.GetAreaName(areaID)
+	local name = C_Map.GetAreaInfo(areaID);
+	if Private.IsSecret(name) or type(name) ~= "string" or name == "" then
+		return nil;
+	end
+	return name;
+end
+
+-- Names repeat inside a zone (Ruins of Ahn'Qiraj) or a map (Forever's City of Dalaran); such a name cannot tell the areas apart.
+function Resolvers.IsAreaNameUnique(areaID, areaName)
+	Resolvers.uniqueAreaNames = Resolvers.uniqueAreaNames or {};
+	local unique = Resolvers.uniqueAreaNames[areaID];
+	if unique == nil then
+		local areas = data.areas or {};
+		local zoneID = Resolvers.GetAreaZoneID(areaID);
+		unique = true;
+		for otherID, other in pairs(areas) do
+			local otherZoneID = Resolvers.GetAreaZoneID(otherID);
+			local sameScope;
+			if zoneID == areaID then
+				sameScope = otherZoneID == otherID and other.continent == areas[areaID].continent;
+			else
+				sameScope = otherZoneID == zoneID;
+			end
+			if otherID ~= areaID and sameScope and Resolvers.GetAreaName(otherID) == areaName then
+				unique = false;
+				break;
+			end
+		end
+		Resolvers.uniqueAreaNames[areaID] = unique;
+	end
+	return unique;
+end
+
+-- nil when unreadable; zone names repeat on other maps (Forever's second Stormwind City), so the map must match too.
+function Resolvers.PlayerIsInArea(areaID, allowSubzone)
+	local zoneID = Resolvers.GetAreaZoneID(areaID);
+	local continentID = zoneID and tonumber(data.areas[areaID].continent);
+	if not continentID or (zoneID ~= areaID and not allowSubzone) then
+		return nil;
+	end
+	local _, _, _, _, _, _, _, instanceID = GetInstanceInfo();
+	if Private.IsSecret(instanceID) or tonumber(instanceID) == nil then
+		return nil;
+	end
+	if tonumber(instanceID) ~= continentID then
+		return false;
+	end
+	local zoneName, expectedZoneName = GetRealZoneText(), Resolvers.GetAreaName(zoneID);
+	if Private.IsSecret(zoneName) or type(zoneName) ~= "string" or zoneName == "" or not expectedZoneName or not Resolvers.IsAreaNameUnique(zoneID, expectedZoneName) then
+		return nil;
+	end
+	if zoneName ~= expectedZoneName then
+		return false;
+	end
+	if zoneID == areaID then
+		return true;
+	end
+	local subZoneName, areaName = GetSubZoneText(), Resolvers.GetAreaName(areaID);
+	if Private.IsSecret(subZoneName) or not areaName or not Resolvers.IsAreaNameUnique(areaID, areaName) then
+		return nil;
+	end
+	return subZoneName == areaName;
 end
 
 function Resolvers.GetSourceClassID(ctx)
@@ -5855,9 +6025,11 @@ local MODIFIER_LEAF_DECODERS = {};
 local MODIFIER_UNSUPPORTED = {};
 Resolvers.modifierUnsupportedTypeLabels = Resolvers.modifierUnsupportedTypeLabels or {};
 Resolvers.modifierUnsupportedTypeLabels[2] = "SOURCE_PLAYER_CONDITION";
+Resolvers.modifierUnsupportedTypeLabels[18] = "TARGET_AREA_OR_ZONE";
 Resolvers.modifierUnsupportedTypeLabels[67] = "WORLD_STATE_EXPRESSION";
 Resolvers.modifierUnsupportedTypeLabels[289] = "TIME_EVENT_PASSED";
 Resolvers.modifierAlwaysUnsupportedTypes = Resolvers.modifierAlwaysUnsupportedTypes or {};
+Resolvers.modifierAlwaysUnsupportedTypes[18] = true;
 Resolvers.modifierAlwaysUnsupportedTypes[289] = nil;
 Resolvers.modifierPartiallyUnsupportedTypes = Resolvers.modifierPartiallyUnsupportedTypes or {};
 Resolvers.modifierPartiallyUnsupportedTypes[2] = true;
@@ -5865,10 +6037,10 @@ Resolvers.modifierPartiallyUnsupportedTypes[67] = true;
 Resolvers.modifierPartiallyUnsupportedTypes[289] = true;
 
 Resolvers.worldStateExpressionLabels = Resolvers.worldStateExpressionLabels or {
-	[1041] = "Alterac Valley mine Horde-owned (state 801 == 1)",
-	[1043] = "Alterac Valley mine Alliance-owned (state 801 == 2)",
-	[1057] = "Alterac Valley mine Alliance-owned (state 804 == 2)",
-	[1058] = "Alterac Valley mine Horde-owned (state 804 == 1)",
+	[1041] = "Alterac Valley Irondeep Mine Alliance-owned (state 801 == 1)",
+	[1043] = "Alterac Valley Irondeep Mine Horde-owned (state 801 == 2)",
+	[1057] = "Alterac Valley Coldtooth Mine Horde-owned (state 804 == 2)",
+	[1058] = "Alterac Valley Coldtooth Mine Alliance-owned (state 804 == 1)",
 	[1368] = "Feast of Winter Veil active",
 	[1621] = "Alterac Valley tower A1 Alliance-owned",
 	[1622] = "Alterac Valley tower A1 Horde-owned",
@@ -6203,6 +6375,15 @@ function Resolvers.ExprOr(left, right)
 	return nil;
 end
 
+function Resolvers.EitherWorldStateEquals(ctx, leftID, rightID, expected)
+	local left = Resolvers.GetWorldStateValue(ctx, leftID);
+	local right = Resolvers.GetWorldStateValue(ctx, rightID);
+	if left == nil or right == nil then
+		return nil;
+	end
+	return left == expected or right == expected;
+end
+
 function Resolvers.EvaluateKnownWorldStateExpression(ctx, asset)
 	asset = tonumber(asset) or 0;
 	if type(ctx) == "table" and type(ctx.worldStateExpressions) == "table" and ctx.worldStateExpressions[asset] ~= nil then
@@ -6246,8 +6427,8 @@ function Resolvers.EvaluateKnownWorldStateExpression(ctx, asset)
 		return result ~= nil and result or Resolvers.IsWarsongFlagAtBase(ctx, "Horde");
 	end
 
-	if asset == 5715 then return Resolvers.ExprOr(Resolvers.CompareWorldStateValue(ctx, 1776, "eq", 1590), Resolvers.CompareWorldStateValue(ctx, 1777, "eq", 1590)); end
-	if asset == 5716 then return Resolvers.ExprOr(Resolvers.CompareWorldStateValue(ctx, 1776, "eq", 0), Resolvers.CompareWorldStateValue(ctx, 1777, "eq", 0)); end
+	if asset == 5715 then return Resolvers.EitherWorldStateEquals(ctx, 1776, 1777, 1590); end
+	if asset == 5716 then return Resolvers.EitherWorldStateEquals(ctx, 1776, 1777, 0); end
 	if asset == 5717 then return Resolvers.ExprOr(Resolvers.CompareWorldStateValue(ctx, 1779, "eq", 5), Resolvers.CompareWorldStateValue(ctx, 1778, "eq", 5)); end
 	if asset == 5718 then
 		local hordeCaptures = Resolvers.GetWorldStateValue(ctx, 1581);
@@ -6256,9 +6437,9 @@ function Resolvers.EvaluateKnownWorldStateExpression(ctx, asset)
 		return (hordeCaptures - allianceCaptures == 3) or (allianceCaptures - hordeCaptures == 3);
 	end
 	if asset == 5719 then return Resolvers.ExprOr(Resolvers.CompareWorldStateValue(ctx, 2752, "eq", 4), Resolvers.CompareWorldStateValue(ctx, 2753, "eq", 4)); end
-	if asset == 5720 then return Resolvers.ExprOr(Resolvers.CompareWorldStateValue(ctx, 2749, "eq", 0), Resolvers.CompareWorldStateValue(ctx, 2750, "eq", 0)); end
-	if asset == 5723 then return Resolvers.ExprAnd(Resolvers.CompareWorldStateValue(ctx, 1351, "ge", 0), Resolvers.CompareWorldStateValue(ctx, 602, "ge", 0)); end
-	if asset == 5724 then return Resolvers.ExprAnd(Resolvers.CompareWorldStateValue(ctx, 1352, "ge", 0), Resolvers.CompareWorldStateValue(ctx, 601, "ge", 0)); end
+	if asset == 5720 then return Resolvers.EitherWorldStateEquals(ctx, 2749, 2750, 0); end
+	-- Captain survival (1351/1352) is not exposed to addons on any client.
+	if asset == 5723 or asset == 5724 then return false; end
 	if asset == 5809 then return Resolvers.CompareWorldStateValue(ctx, 3645, "eq", 1); end
 	if asset == 5810 then return Resolvers.CompareWorldStateValue(ctx, 3644, "eq", 1); end
 
@@ -6468,15 +6649,19 @@ MODIFIER_LEAF_DECODERS[16] = function(ctx)
 	return UnitIsDeadOrGhost("player") ~= true;
 end;
 
--- 17: SOURCE_AREA_OR_ZONE matches asset (player current zone)
-MODIFIER_LEAF_DECODERS[17] = function(ctx, asset)
-	local zone = ctx.zoneAreaID or GetCurrentZoneAreaID();
-	if not zone then return true; end
-	return zone == asset;
+-- 17: SOURCE_AREA_OR_ZONE: the player's zone or subzone is asset (AreaTable id).
+MODIFIER_LEAF_DECODERS[17] = function(_, asset)
+	local inArea = Resolvers.PlayerIsInArea(tonumber(asset), true);
+	if inArea == nil then
+		return MODIFIER_UNSUPPORTED;
+	end
+	return inArea;
 end;
 
--- 18: TARGET_AREA_OR_ZONE matches asset (assume same zone for combat events)
-MODIFIER_LEAF_DECODERS[18] = MODIFIER_LEAF_DECODERS[17];
+-- 18: TARGET_AREA_OR_ZONE. Addons cannot read where another unit stands.
+MODIFIER_LEAF_DECODERS[18] = function(ctx, asset, _, _, _, treeID)
+	return Resolvers.DebugUnsupportedModifier(ctx, 18, asset, treeID);
+end;
 
 -- 20: MAP_DIFFICULTY_OLD. In Wrath-era rows this is the old raid-size
 -- gate: 0 = 10-player, 1 = 25-player.
@@ -6528,13 +6713,10 @@ MODIFIER_LEAF_DECODERS[24] = function(_, asset)
 	return false;
 end;
 
--- 25: SOURCE_RACE: bitmask asset & (1<<(raceID-1)) ~= 0
+-- 25: SOURCE_RACE == asset (ChrRaces id).
 MODIFIER_LEAF_DECODERS[25] = function(ctx, asset)
 	local raceID = ctx.sourceRaceID or GetPlayerRaceID();
-	if not raceID or not asset then return false; end
-	local bit = PLAYABLE_RACE_BIT[raceID];
-	if not bit then return false; end
-	return (asset % (bit * 2)) >= bit;
+	return raceID ~= nil and raceID == asset;
 end;
 
 -- 26: SOURCE_CLASS == asset.
@@ -6543,27 +6725,15 @@ MODIFIER_LEAF_DECODERS[26] = function(ctx, asset)
 	return classID ~= nil and classID == asset;
 end;
 
--- 27: TARGET_RACE: bitmask
+-- 27: TARGET_RACE == asset (ChrRaces id).
 MODIFIER_LEAF_DECODERS[27] = function(ctx, asset)
-	local raceID = ctx.targetRaceID;
-	if not raceID and ctx.targetUnit then
-		raceID = GetTargetRaceID(ctx.targetUnit);
-	end
-	if not raceID or not asset then
-		-- Unknown target race; permissive only when target is player.
-		return ctx.targetIsPlayer == true;
-	end
-	local bit = PLAYABLE_RACE_BIT[raceID];
-	if not bit then return false; end
-	return (asset % (bit * 2)) >= bit;
+	local raceID = ctx.targetRaceID or GetTargetRaceID(ctx.targetUnit) or Resolvers.GetRaceAndClassIDFromGUID(ctx.destGUID);
+	return raceID ~= nil and raceID == asset;
 end;
 
 -- 28: TARGET_CLASS == asset.
 MODIFIER_LEAF_DECODERS[28] = function(ctx, asset)
-	local classID = ctx and ctx.targetClassID or nil;
-	if not classID and ctx and ctx.targetUnit then
-		classID = Resolvers.GetTargetClassID(ctx.targetUnit);
-	end
+	local classID = ctx.targetClassID or Resolvers.GetTargetClassID(ctx.targetUnit) or select(2, Resolvers.GetRaceAndClassIDFromGUID(ctx.destGUID));
 	return classID ~= nil and classID == asset;
 end;
 
@@ -6589,6 +6759,7 @@ MODIFIER_LEAF_DECODERS[30] = function(ctx, asset)
 	end
 	if not ctx.targetUnit or not UnitCreatureType then return false; end
 	local name = UnitCreatureType(ctx.targetUnit);
+	if Private.IsSecret(name) then return false; end
 	local id = name and Resolvers.GetCreatureTypeIDFromName(name);
 	if not id then return false; end
 	return id == asset;
@@ -6627,11 +6798,13 @@ MODIFIER_LEAF_DECODERS[35] = function(ctx)
 	return Resolvers.GetCurrentGroupSize() <= 1;
 end;
 
--- 41: SOURCE_ZONE == asset
-MODIFIER_LEAF_DECODERS[41] = function(ctx, asset)
-	local zone = ctx.zoneAreaID or GetCurrentZoneAreaID();
-	if not zone then return false; end
-	return zone == asset;
+-- 41: SOURCE_ZONE: the player's zone is asset (AreaTable id).
+MODIFIER_LEAF_DECODERS[41] = function(_, asset)
+	local inZone = Resolvers.PlayerIsInArea(tonumber(asset), false);
+	if inZone == nil then
+		return MODIFIER_UNSUPPORTED;
+	end
+	return inZone;
 end;
 
 -- 46: TARGET_HEALTH_PCT_LOWER. At PARTY_KILL the target HP is 0 so
@@ -6657,7 +6830,8 @@ MODIFIER_LEAF_DECODERS[55] = function(ctx, asset)
 		if not ctx.targetUnit or not UnitIsPlayer(ctx.targetUnit) then
 			return false;
 		end
-		return UnitSex(ctx.targetUnit) == 3;
+		local sex = UnitSex(ctx.targetUnit);
+		return not Private.IsSecret(sex) and sex == 3;
 	end
 	return false;
 end;
@@ -7207,12 +7381,230 @@ function Resolvers.RecordPlayerKilledByCreature()
 	return recorded;
 end
 
+-- Player kills (Era/TBC): killing blows come from PARTY_KILL, honorable kills from the server's honor message.
+do
+	local PLAYER_KILL_WINDOW = 10;
+	local RACE_FACTION = {
+		[1] = "Alliance", [3] = "Alliance", [4] = "Alliance", [7] = "Alliance", [11] = "Alliance",
+		[2] = "Horde", [5] = "Horde", [6] = "Horde", [8] = "Horde", [10] = "Horde",
+	};
+	local HONOR_GAIN_GLOBALS = { "COMBATLOG_HONORGAIN", "COMBATLOG_HONORGAIN_NO_RANK", "COMBATLOG_HONORGAIN_EXHAUSTION1", "COMBATLOG_HONORGAIN_NO_RANK_EXHAUSTION1" };
+	local honorGainPatterns;
+
+	local function GetPlayerKillState()
+		Private.state = Private.state or {};
+		local killState = Private.state.playerKills;
+		if not killState then
+			killState = { deaths = {}, pendingHonor = {}, killingBlows = {}, ownKills = {}, honored = {}, killCredited = {} };
+			Private.state.playerKills = killState;
+		end
+		local now = GetTime();
+		for _, list in ipairs({ killState.deaths, killState.pendingHonor }) do
+			for index = #list, 1, -1 do
+				if now - list[index].at > PLAYER_KILL_WINDOW then
+					table.remove(list, index);
+				end
+			end
+		end
+		for _, entries in ipairs({ killState.killingBlows, killState.ownKills, killState.honored, killState.killCredited }) do
+			for guid, entry in pairs(entries) do
+				if now - (type(entry) == "table" and entry.at or entry) > PLAYER_KILL_WINDOW then
+					entries[guid] = nil;
+				end
+			end
+		end
+		return killState, now;
+	end
+
+	local function IsHostilePlayerGUID(guid, flags)
+		return not Private.IsSecret(guid) and not Private.IsSecret(flags) and type(guid) == "string" and string.sub(guid, 1, 7) == "Player-"
+			and guid ~= UnitGUID("player") and type(flags) == "number"
+			and HasFlag(flags, COMBATLOG_OBJECT_TYPE_PLAYER or 0x00000400) and HasFlag(flags, COMBATLOG_OBJECT_REACTION_HOSTILE or 0x00000040);
+	end
+
+	local function IsGroupMemberGUID(guid)
+		local prefix, count = "party", 4;
+		if IsInRaid() then
+			prefix, count = "raid", 40;
+		end
+		for index = 1, count do
+			local memberGUID = UnitGUID(prefix .. index);
+			if not Private.IsSecret(memberGUID) and memberGUID == guid then
+				return true;
+			end
+		end
+		return false;
+	end
+
+	local function CompletePlayerKillContext(ctx)
+		if not ctx.targetRaceID or not ctx.targetClassID then
+			local raceID, classID = Resolvers.GetRaceAndClassIDFromGUID(ctx.destGUID);
+			ctx.targetRaceID = ctx.targetRaceID or raceID;
+			ctx.targetClassID = ctx.targetClassID or classID;
+		end
+		if not ctx.targetUnit then
+			ctx.targetIsMounted = nil;
+		end
+		return ctx;
+	end
+
+	-- Charmed allies, same-faction FFA victims and unknown races never count; arenas only need a hostile non-member.
+	local function IsEnemyPlayerVictim(ctx)
+		if not IsHostilePlayerGUID(ctx.destGUID, ctx.destFlags) or IsGroupMemberGUID(ctx.destGUID) then
+			return false;
+		end
+		local _, instanceType = GetInstanceInfo();
+		if instanceType == "arena" then
+			return true;
+		end
+		local playerFaction = UnitFactionGroup("player");
+		local victimFaction = ctx.targetRaceID and RACE_FACTION[ctx.targetRaceID];
+		return victimFaction ~= nil and (playerFaction == "Alliance" or playerFaction == "Horde") and victimFaction ~= playerFaction;
+	end
+
+	local function RecordPlayerKillEvent(refreshTypes, criteriaType, assetID, ctx)
+		if assetID and RecordCriteriaEvent(criteriaType, assetID, ctx) then
+			return Resolvers.MarkCriteriaRefreshType(refreshTypes, criteriaType);
+		end
+		return refreshTypes;
+	end
+
+	local function RecordHonorableKillingBlow(refreshTypes, ctx)
+		refreshTypes = RecordPlayerKillEvent(refreshTypes, CRITERIA_TYPE.KILLING_BLOW_TO_CLASS, ctx.targetClassID, ctx);
+		return RecordPlayerKillEvent(refreshTypes, CRITERIA_TYPE.KILLING_BLOW_TO_RACE, ctx.targetRaceID, ctx);
+	end
+
+	local function RecordPlayerKillCredit(killState, refreshTypes, ctx, now)
+		if killState.killCredited[ctx.destGUID] then
+			return refreshTypes;
+		end
+		killState.killCredited[ctx.destGUID] = now;
+		return RecordPlayerKillEvent(refreshTypes, CRITERIA_TYPE.KILL_PLAYER_NO_HONOR_CHECK, 0, ctx);
+	end
+
+	local function RecordKillInPlayerArea(refreshTypes, ctx)
+		local seen = {};
+		for _, criteria in ipairs(Resolvers.GetPerCriteriaRecordableCriteriaByType(CRITERIA_TYPE.KILL_PLAYER_IN_AREA)) do
+			local areaID = tonumber(criteria.asset) or 0;
+			if areaID ~= 0 and not seen[areaID] then
+				seen[areaID] = true;
+				if Resolvers.PlayerIsInArea(areaID, true) then
+					refreshTypes = RecordPlayerKillEvent(refreshTypes, CRITERIA_TYPE.KILL_PLAYER_IN_AREA, areaID, ctx);
+				end
+			end
+		end
+		return refreshTypes;
+	end
+
+	function Resolvers.RecordOwnPlayerKill(ctx)
+		if UnitIsDeadOrGhost("player") or not IsEnemyPlayerVictim(CompletePlayerKillContext(ctx)) then
+			return nil;
+		end
+		local killState, now = GetPlayerKillState();
+		if killState.killingBlows[ctx.destGUID] then
+			return nil;
+		end
+		killState.killingBlows[ctx.destGUID] = now;
+		Resolvers.RecordCriteriaStart(CRITERIA_START_EVENT.KILL_PLAYER, 0);
+		local refreshTypes = RecordPlayerKillEvent(nil, CRITERIA_TYPE.KILLING_BLOW, 0, ctx);
+		refreshTypes = RecordPlayerKillCredit(killState, refreshTypes, ctx, now);
+		if killState.honored[ctx.destGUID] then
+			refreshTypes = RecordHonorableKillingBlow(refreshTypes, ctx);
+		else
+			killState.ownKills[ctx.destGUID] = { at = now, ctx = ctx };
+		end
+		return refreshTypes;
+	end
+
+	local function CreditHonorableKill(killState, refreshTypes, death, now)
+		if killState.honored[death.guid] then
+			return refreshTypes;
+		end
+		killState.honored[death.guid] = now;
+		local ctx = CompletePlayerKillContext(BuildKillCombatContext(UnitGUID("player"), nil, death.guid, death.flags, nil));
+		refreshTypes = RecordPlayerKillEvent(refreshTypes, CRITERIA_TYPE.HONORABLE_KILL, 0, ctx);
+		refreshTypes = RecordKillInPlayerArea(refreshTypes, ctx);
+		refreshTypes = RecordPlayerKillCredit(killState, refreshTypes, ctx, now);
+		local ownKill = killState.ownKills[death.guid];
+		if ownKill then
+			killState.ownKills[death.guid] = nil;
+			refreshTypes = RecordHonorableKillingBlow(refreshTypes, ownKill.ctx);
+		end
+		return refreshTypes;
+	end
+
+	local function ShortPlayerName(name)
+		return (string.gsub(name, "%-.*$", ""));
+	end
+
+	local function FindRecentPlayerDeath(killState, name, at)
+		local shortName = ShortPlayerName(name);
+		local exact, short, ambiguous;
+		for _, death in ipairs(killState.deaths) do
+			if math.abs(death.at - at) <= PLAYER_KILL_WINDOW then
+				if death.name == name then
+					exact = death;
+				elseif ShortPlayerName(death.name) == shortName then
+					ambiguous = ambiguous or (short ~= nil and short.guid ~= death.guid);
+					short = death;
+				end
+			end
+		end
+		return exact or (not ambiguous and short) or nil;
+	end
+
+	local function ResolvePendingHonorKills(killState, now)
+		local refreshTypes;
+		for index = #killState.pendingHonor, 1, -1 do
+			local pending = killState.pendingHonor[index];
+			local death = FindRecentPlayerDeath(killState, pending.name, pending.at);
+			if death then
+				table.remove(killState.pendingHonor, index);
+				refreshTypes = CreditHonorableKill(killState, refreshTypes, death, now);
+			end
+		end
+		return Resolvers.ScheduleCriteriaTypesRefresh(refreshTypes, true, 0.15, "honor-kill");
+	end
+
+	function Resolvers.NotePlayerDeath(guid, name, flags)
+		if not IsHostilePlayerGUID(guid, flags) or Private.IsSecret(name) or type(name) ~= "string" or name == "" then
+			return false;
+		end
+		local killState, now = GetPlayerKillState();
+		killState.deaths[#killState.deaths + 1] = { guid = guid, name = name, flags = flags, at = now };
+		return ResolvePendingHonorKills(killState, now);
+	end
+
+	function Resolvers.RecordHonorGainCriteria(message)
+		if Private.IsSecret(message) or type(message) ~= "string" then
+			return false;
+		end
+		if not honorGainPatterns then
+			honorGainPatterns = {};
+			for _, globalName in ipairs(HONOR_GAIN_GLOBALS) do
+				local pattern, roles = Resolvers.BuildChatFormatPattern(_G[globalName], { [1] = "victim" });
+				if pattern then
+					honorGainPatterns[#honorGainPatterns + 1] = { pattern = pattern, roles = roles };
+				end
+			end
+		end
+		for _, entry in ipairs(honorGainPatterns) do
+			local victim = Resolvers.ReadPatternCaptures(entry.roles, string.match(message, entry.pattern)).victim;
+			if victim and victim ~= "" then
+				local killState, now = GetPlayerKillState();
+				killState.pendingHonor[#killState.pendingHonor + 1] = { name = victim, at = now };
+				return ResolvePendingHonorKills(killState, now);
+			end
+		end
+		return false;
+	end
+end
 
 local function HandleCombatLogCriteria()
 	if type(CombatLogGetCurrentEventInfo) ~= "function" then
 		return;
 	end
-	local _, subevent, _, sourceGUID, _, sourceFlags, _, destGUID, _, destFlags, _, eventArg1, _, _, eventArg4, eventArg5 = CombatLogGetCurrentEventInfo();
+	local _, subevent, _, sourceGUID, _, sourceFlags, _, destGUID, destName, destFlags, _, eventArg1, _, _, eventArg4, eventArg5 = CombatLogGetCurrentEventInfo();
 
 	-- Soul of Iron Naxx tracking is the only consumer that cares about lines
 	-- where the player is not involved (boss-vs-other-raider), but it is gated
@@ -7224,6 +7616,10 @@ local function HandleCombatLogCriteria()
 			Achievements.RefreshCriteriaAchievements(true);
 		end
 		return true;
+	end
+
+	if subevent == "UNIT_DIED" then
+		Resolvers.NotePlayerDeath(destGUID, destName, destFlags);
 	end
 
 	-- Cheap relevance gate: every combat-log line that matters to a criterion
@@ -7358,45 +7754,14 @@ local function HandleCombatLogCriteria()
 				refreshDelay = 0.15;
 			end
 		end
-		if DestIsPlayer(destGUID, destFlags) then
-			Resolvers.RecordCriteriaStart(CRITERIA_START_EVENT.KILL_PLAYER, 0);
-			if ctx.zoneAreaID then
-				if RecordCriteriaEvent(CRITERIA_TYPE.KILL_PLAYER_IN_AREA, ctx.zoneAreaID, ctx) then
-					recorded = true;
-					refreshTypes = Resolvers.MarkCriteriaRefreshType(refreshTypes, CRITERIA_TYPE.KILL_PLAYER_IN_AREA);
-					refreshDelay = 0.15;
-				end
-			end
-			if ctx.targetClassID then
-				if RecordCriteriaEvent(CRITERIA_TYPE.KILLING_BLOW_TO_CLASS, ctx.targetClassID, ctx) then
-					recorded = true;
-					refreshTypes = Resolvers.MarkCriteriaRefreshType(refreshTypes, CRITERIA_TYPE.KILLING_BLOW_TO_CLASS);
-					refreshDelay = 0.15;
-				end
-			end
-			if ctx.targetRaceID then
-				if RecordCriteriaEvent(CRITERIA_TYPE.KILLING_BLOW_TO_RACE, ctx.targetRaceID, ctx) then
-					recorded = true;
-					refreshTypes = Resolvers.MarkCriteriaRefreshType(refreshTypes, CRITERIA_TYPE.KILLING_BLOW_TO_RACE);
-					refreshDelay = 0.15;
-				end
-			end
-			if RecordCriteriaEvent(CRITERIA_TYPE.HONORABLE_KILL, 0, ctx) then
+		if SourceIsPlayerControlled(sourceGUID, sourceFlags) then
+			for criteriaType in pairs(Resolvers.RecordOwnPlayerKill(ctx) or {}) do
 				recorded = true;
-				refreshTypes = Resolvers.MarkCriteriaRefreshType(refreshTypes, CRITERIA_TYPE.HONORABLE_KILL);
-				refreshDelay = 0.15;
-			end
-			if RecordCriteriaEvent(CRITERIA_TYPE.KILLING_BLOW, 0, ctx) then
-				recorded = true;
-				refreshTypes = Resolvers.MarkCriteriaRefreshType(refreshTypes, CRITERIA_TYPE.KILLING_BLOW);
-				refreshDelay = 0.15;
-			end
-			if RecordCriteriaEvent(CRITERIA_TYPE.KILL_PLAYER_NO_HONOR_CHECK, 0, ctx) then
-				recorded = true;
-				refreshTypes = Resolvers.MarkCriteriaRefreshType(refreshTypes, CRITERIA_TYPE.KILL_PLAYER_NO_HONOR_CHECK);
+				refreshTypes = Resolvers.MarkCriteriaRefreshType(refreshTypes, criteriaType);
 				refreshDelay = 0.15;
 			end
 		end
+		Resolvers.NotePlayerDeath(destGUID, destName, destFlags);
 	elseif subevent == "SPELL_CAST_SUCCESS" and SourceIsPlayerControlled(sourceGUID, sourceFlags) then
 		Resolvers.RecordCriteriaStart(CRITERIA_START_EVENT.CAST_SPELL, spellID);
 		Resolvers.RecordCriteriaFail(CRITERIA_FAIL_EVENT.CAST_SPELL, spellID);
@@ -7594,8 +7959,9 @@ local function BuildEmoteTargetContext(emoteTarget)
 		return ctx;
 	end
 	ctx.targetUnit = unit;
-	ctx.targetName = UnitName(unit);
-	ctx.destGUID = UnitGUID(unit);
+	local targetName, destGUID = UnitName(unit), UnitGUID(unit);
+	ctx.targetName = not Private.IsSecret(targetName) and targetName or nil;
+	ctx.destGUID = not Private.IsSecret(destGUID) and destGUID or nil;
 	ctx.creatureID = GetCreatureIDFromGUID(ctx.destGUID);
 	local targetFacts = ctx.destGUID and Resolvers.CacheTargetFacts(ctx.destGUID, unit, nil, ctx.creatureID) or nil;
 	ctx.targetFacts = targetFacts;
@@ -8220,6 +8586,7 @@ Achievements.ResolveCriteriaTree = Resolvers.ResolveCriteriaTree;
 Achievements.RegisterQuestAreaQuests = Resolvers.RegisterQuestAreaQuests;
 Achievements.RegisterQuestSortQuests = Resolvers.RegisterQuestSortQuests;
 Achievements.HandleCombatLogCriteria = HandleCombatLogCriteria;
+Achievements.RecordHonorGainCriteria = Resolvers.RecordHonorGainCriteria;
 Resolvers.RecordCombatCriteriaAsset = RecordCombatCriteriaAsset;
 Resolvers.BuildKillCombatContext = BuildKillCombatContext;
 Resolvers.GetCreatureIDFromGUID = GetCreatureIDFromGUID;

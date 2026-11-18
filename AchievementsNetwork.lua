@@ -4,6 +4,7 @@ if not Achievements then
 end
 
 local Private = Achievements.private;
+local IsSecret = Private.IsSecret;
 
 local ADDON_PREFIX = "ACHV";
 local PROTOCOL_VERSION = "2";
@@ -697,7 +698,10 @@ local function HandleChannelEvent(event, ...)
 	if not IsDiscoveryChannelName(channelName) then
 		return;
 	end
-	local sender = select(2, ...);
+	local text, sender = ...;
+	if IsSecret(text) or IsSecret(sender) then
+		return;
+	end
 	if event == "CHAT_MSG_CHANNEL_JOIN" then
 		RememberChannelMember(sender);
 	elseif event == "CHAT_MSG_CHANNEL_LEAVE" then
@@ -705,7 +709,7 @@ local function HandleChannelEvent(event, ...)
 	elseif event == "CHAT_MSG_CHANNEL" then
 		RememberChannelMember(sender);
 	elseif event == "CHAT_MSG_CHANNEL_LIST" then
-		RememberChannelListMembers(select(1, ...));
+		RememberChannelListMembers(text);
 	end
 end
 

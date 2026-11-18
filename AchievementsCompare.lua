@@ -29,6 +29,7 @@ if not Achievements then
 end
 
 local Private = Achievements.private;
+local IsSecret = Private.IsSecret;
 
 local ADDON_PREFIX = "ACHV";
 local PROTOCOL_VERSION = "2";
@@ -59,7 +60,9 @@ local function NameIncludesRealm(name)
 end
 
 local function DebugValue(value)
-	if value == nil then
+	if IsSecret(value) then
+		return "<secret>";
+	elseif value == nil then
 		return "nil";
 	end
 	return tostring(value);
@@ -176,11 +179,11 @@ local function ResolveTargetFromGUID(unit, fallbackName)
 		return nil;
 	end
 	local guid = UnitGUID(unit);
-	if not guid or guid == "" then
+	if IsSecret(guid) or not guid or guid == "" then
 		DebugCompare("unit guid missing unit=" .. DebugValue(unit) .. " fallback=" .. DebugValue(fallbackName));
 		return nil;
 	end
-	return ResolveTargetFromGUIDValue(guid, fallbackName or UnitName(unit));
+	return ResolveTargetFromGUIDValue(guid, fallbackName);
 end
 
 local function ResolveTargetFromPlayerLocation(playerLocation, fallbackName)
@@ -194,6 +197,9 @@ local function ResolveTargetFromPlayerLocation(playerLocation, fallbackName)
 			guid = value;
 		end
 	end
+	if IsSecret(guid) then
+		return nil;
+	end
 	guid = guid or playerLocation.guid or playerLocation.playerGUID or playerLocation.GUID;
 	if guid then
 		DebugCompare("playerLocation guid=" .. DebugValue(guid));
@@ -205,6 +211,9 @@ local function ResolveTargetFromPlayerLocation(playerLocation, fallbackName)
 		if ok then
 			unit = value;
 		end
+	end
+	if IsSecret(unit) then
+		return nil;
 	end
 	unit = unit or playerLocation.unit or playerLocation.unitToken;
 	if unit then
@@ -236,11 +245,14 @@ local function ResolveTargetFromLocalRealm(shortName, unit)
 end
 
 ResolveTargetFromUnit = function(unit)
-	if not unit then
+	if IsSecret(unit) or not unit then
 		return nil;
 	end
 	local shortName;
 	local fullName, fullRealm = UnitFullName(unit);
+	if IsSecret(fullName) or IsSecret(fullRealm) then
+		return nil;
+	end
 	if fullName and fullName ~= "" then
 		if fullRealm and fullRealm ~= "" then
 			return fullName .. "-" .. fullRealm, true;
@@ -249,6 +261,9 @@ ResolveTargetFromUnit = function(unit)
 	end
 	if not shortName then
 		local unitName = UnitName(unit);
+		if IsSecret(unitName) then
+			return nil;
+		end
 		shortName = unitName;
 	end
 	local guidTarget, guidHasRealm = ResolveTargetFromGUID(unit, shortName);
@@ -263,7 +278,7 @@ ResolveTargetFromUnit = function(unit)
 		return ExpandKnownPlayerName(shortName);
 	end
 	local name, realm = UnitName(unit);
-	if not name or name == "" then
+	if IsSecret(name) or IsSecret(realm) or not name or name == "" then
 		return nil;
 	end
 	if realm and realm ~= "" then
@@ -719,11 +734,14 @@ local function ResolveTargetFromContext(contextData)
 		DebugCompare("context resolve no contextData");
 		return nil;
 	end
+	if IsSecret(contextData.name) or IsSecret(contextData.server) or IsSecret(contextData.unit) then
+		return nil;
+	end
 	local contextSummary = {};
 	if type(contextData) == "table" then
 		for key, value in pairs(contextData) do
 			if type(value) ~= "function" and #contextSummary < 12 then
-				contextSummary[#contextSummary + 1] = tostring(key) .. "=" .. tostring(value);
+				contextSummary[#contextSummary + 1] = tostring(key) .. "=" .. DebugValue(value);
 			end
 		end
 	end
@@ -785,7 +803,7 @@ local function ResolveTargetFromContext(contextData)
 end
 
 local function CanCompareContext(contextData)
-	if not contextData then
+	if not contextData or IsSecret(contextData.unit) or IsSecret(contextData.name) or IsSecret(contextData.server) then
 		return false;
 	end
 	local unit = contextData.unit;
@@ -793,13 +811,17 @@ local function CanCompareContext(contextData)
 		if not UnitIsPlayer(unit) then
 			return false;
 		end
-		if UnitIsUnit(unit, "player") then
-			return false;
-		end
 		if UnitCanAttack("player", unit) then
 			return false;
 		end
-		return true;
+		local isLocalUnit = UnitIsUnit(unit, "player");
+		if not IsSecret(isLocalUnit) then
+			return not isLocalUnit;
+		end
+		local guid = UnitGUID(unit);
+		if not IsSecret(guid) and guid then
+			return guid ~= UnitGUID("player");
+		end
 	end
 	local name = contextData.name;
 	if not name or name == "" then

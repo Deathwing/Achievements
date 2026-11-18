@@ -494,7 +494,7 @@ function Achievements.EvaluateAchievementCriteriaState(achievementID)
 
 	local achievement = ACHIEVEMENT_DATA[achievementID];
 	local criteriaTreeID = GetAchievementCriteriaRootID(achievement);
-	if not achievement then
+	if not achievement or not Private.IsAchievementForPlayerFaction(achievement) then
 		return nil;
 	end
 	if Achievements.ResolveSpecialAchievementState then

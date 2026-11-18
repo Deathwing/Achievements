@@ -22,6 +22,11 @@ Achievements.IS_FOREVER = WOW_PROJECT_ID == WOW_PROJECT_CAMELOT;
 
 local Private = Achievements.private or {};
 Achievements.private = Private;
+
+function Private.IsSecret(value)
+	return issecretvalue ~= nil and issecretvalue(value) == true;
+end
+
 local SetPortraitToTexture = SetPortraitToTexture or (rawget(_G, "AchievementsForeverCompat") or {}).SetPortraitToTexture;
 
 local DEBUG = false;
@@ -1103,12 +1108,15 @@ end
 local function QueueAchievementAlert(achievementID)
 	EnsureAchievementUIForNotification();
 
-	if AchievementAlertSystem and AchievementAlertSystem.AddAlert then
-		AchievementAlertSystem:AddAlert(achievementID);
+	local alertSystem = _G[Private.UIName("AchievementAlertSystem")];
+	if alertSystem and alertSystem.AddAlert then
+		alertSystem:AddAlert(achievementID);
 		return;
 	end
 
-	DispatchFrameEvent(AlertFrame, "ACHIEVEMENT_EARNED", achievementID);
+	if not Achievements.IS_FOREVER then
+		DispatchFrameEvent(AlertFrame, "ACHIEVEMENT_EARNED", achievementID);
+	end
 end
 
 local lastAchievementEarnedSoundTime = -ACHIEVEMENT_EARNED_SOUND_MIN_INTERVAL;
@@ -1133,7 +1141,7 @@ local function NotifyAchievementEarned(achievementID, showAlert)
 
 	if showAlert and ShouldPlayAchievementVisual(achievement) then
 		PlayAchievementEarnedSound();
-		QueueAchievementAlert(achievementID);
+		securecallfunction(QueueAchievementAlert, achievementID);
 	end
 
 	DispatchFrameEvent(AchievementsFrameAchievements, "ACHIEVEMENT_EARNED", achievementID);

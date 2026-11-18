@@ -1170,17 +1170,9 @@ function AchievementsFrame_LoadTextures()
 	end
 end
 
--- The achievement UI frame is intentionally named AchievementsFrame instead of
--- AchievementFrame: Blizzard's protected UpdateMicroButtons() reads the global
--- AchievementFrame during GameMenu Show/Hide, and a frame global created by an
--- insecure addon is permanently tainted, which blocks the Log Out/Exit buttons
--- (ADDON_ACTION_FORBIDDEN). With the rename that protected read cleanly sees
--- nil. The two native insecure functions below still reference the old globals
--- (which would now error), so redefine them against the bundled UI. Neither is
--- read by protected code, so overriding them is taint-safe.
+-- Named AchievementsFrame, not AchievementFrame: an addon-made AchievementFrame global taints Blizzard's protected UpdateMicroButtons() and blocks Log Out.
 
--- Native alert toast click handler (AlertFrameSystems.lua); our toasts go
--- through the native AchievementAlertSystem which binds this by name.
+-- OnClick of AchievementsAlertFrameTemplate.
 function AchievementsAlertFrame_OnClick(self, button, down)
 	if ( AlertFrame_OnClick and AlertFrame_OnClick(self, button, down) ) then
 		return;
@@ -1202,6 +1194,31 @@ function AchievementsAlertFrame_OnClick(self, button, down)
 	end
 
 	AchievementsFrame_SelectAchievement(id);
+end
+
+-- Setup of AchievementsAlertSystem (registered in Blizzard_AchievementUI.xml after its template).
+function AchievementsAlertFrame_SetUp(frame, achievementID)
+	local _, name, points, _, _, _, _, _, _, icon = GetAchievementInfo(achievementID);
+	if ( not name ) then
+		return false;
+	end
+
+	frame.Name:SetText(name);
+	AchievementsShield_SetPoints(points, frame.Shield.Points, GameFontNormal, GameFontNormalSmall);
+
+	local shieldIcon = frame.Shield.Icon;
+	if ( (tonumber(points) or 0) == 0 ) then
+		-- Forever has no UI-Achievement-Shield-NoPoints atlas; sized like ui-achievement-shield-2.
+		shieldIcon:SetTexture([[Interface\AchievementFrame\UI-Achievement-Shields-NoPoints]]);
+		shieldIcon:SetTexCoord(0, 0.5, 0, 0.45);
+		shieldIcon:SetSize(62, 55);
+	else
+		shieldIcon:SetAtlas("ui-achievement-shield-2", TextureKitConstants.UseAtlasSize);
+	end
+
+	frame.Icon.Texture:SetTexture(icon);
+	frame.id = achievementID;
+	return true;
 end
 
 -- Native deep link used by guild news/rewards (UIParent.lua).

@@ -3,6 +3,7 @@ if not Achievements then
 	error("Achievements: Achievements.lua must load before AchievementsChatLinks.lua");
 end
 
+local IsSecret = Achievements.private.IsSecret;
 local achievementChatLinksHooked;
 local recentOutgoingAchievementMessages = {};
 local ADDON_PREFIX = "ACHV";
@@ -298,7 +299,7 @@ local function IsLocalChatSender(event, sender)
 end
 
 local function AchievementChatLinkFilter(_, event, message, sender, language, channelString, target, flags, unknown, channelNumber, channelName, unknown2, counter, guid, bnSenderID)
-	if type(message) ~= "string" or not IsLocalChatSender(event, sender) then
+	if IsSecret(message) or IsSecret(sender) or type(message) ~= "string" or not IsLocalChatSender(event, sender) then
 		return false;
 	end
 
@@ -408,7 +409,7 @@ local function RebuildIncomingAchievementLinks(text, sender)
 end
 
 local function IncomingAchievementLinkFilter(_, event, message, sender, language, channelString, target, flags, unknown, channelNumber, channelName, unknown2, counter, guid, bnSenderID)
-	if type(message) ~= "string" then
+	if IsSecret(message) or IsSecret(sender) or type(message) ~= "string" then
 		return false;
 	end
 
@@ -426,6 +427,36 @@ local function IncomingAchievementLinkFilter(_, event, message, sender, language
 	return false;
 end
 
+local function InChatLockdown()
+	return C_ChatInfo.InChatMessagingLockdown ~= nil and C_ChatInfo.InChatMessagingLockdown();
+end
+
+local function ShowLinkLockdownError()
+	UIErrorsFrame:OnEvent("UI_ERROR_MESSAGE", 525, ERR_NOT_IN_COMBAT);
+end
+
+-- Our links carry at most 5 fields; Forever's native ones carry 10 and come from secure code.
+local function HasAddonAchievementLink(text)
+	for linkData in text:gmatch("|Hachievement:([^|]+)|h") do
+		if select("#", strsplit(":", linkData)) <= 5 then
+			return true;
+		end
+	end
+	return false;
+end
+
+-- Forever blocks any chat message holding text an addon inserted while chat is locked down (battlegrounds, dungeons, raids).
+function Achievements.InsertChatLink(link)
+	if InChatLockdown() then
+		ShowLinkLockdownError();
+		return false;
+	end
+	if ChatEdit_InsertLink then
+		return ChatEdit_InsertLink(link);
+	end
+	return ChatFrameUtil.InsertLink(link);
+end
+
 local function HookAchievementChatLinks()
 	if achievementChatLinksHooked then
 		return;
@@ -440,36 +471,38 @@ local function HookAchievementChatLinks()
 	end
 	EnsureLinkMetaListener();
 
-	-- Replace the outgoing send functions so we can strip our custom
-	-- |Hachievement|h hyperlinks before transmission. The server enforces
-	-- a 255-byte cap on chat messages and a single achievement link is
-	-- already ~75 characters, so two or more in one message would silently
-	-- exceed the limit and the message would never appear. We send the
-	-- bracketed text instead and rebuild the rich link on the local echo.
-	local originalSendChatMessage = C_ChatInfo.SendChatMessage;
-	C_ChatInfo.SendChatMessage = function(text, chatType, language, target, ...)
-		if type(text) == "string" then
-			local foundLink, strippedText = StripAchievementChatLinks(text, true);
-			if foundLink then
-				RecordOutgoingAchievementChatMessage(text);
-				SendOutgoingAchievementLinkMetas(text, chatType, target);
-				return originalSendChatMessage(strippedText, chatType, language, target, ...);
-			end
+	-- Links (~75 bytes, 255-byte cap) go out as [Name] via Blizzard's pre-send step; any edit taints the send during lockdown.
+	local function StripOutgoingAchievementLinks(editBox)
+		local text = editBox:GetText();
+		local foundLink, strippedText = StripAchievementChatLinks(text, true);
+		if not foundLink then
+			return;
 		end
-		return originalSendChatMessage(text, chatType, language, target, ...);
-	end;
+		if InChatLockdown() then
+			if HasAddonAchievementLink(text) then
+				editBox:SetText("");
+				ShowLinkLockdownError();
+			end
+			return;
+		end
+		if strippedText:sub(1, 1) == "/" then
+			return;
+		end
+		RecordOutgoingAchievementChatMessage(text);
+		local chatType = editBox:GetAttribute("chatType");
+		if chatType == "WHISPER" then
+			SendOutgoingAchievementLinkMetas(text, chatType, editBox:GetAttribute("tellTarget"));
+		elseif chatType == "CHANNEL" then
+			SendOutgoingAchievementLinkMetas(text, chatType, (GetChannelName(editBox:GetAttribute("channelTarget") or 0)));
+		elseif chatType ~= "BN_WHISPER" then
+			SendOutgoingAchievementLinkMetas(text, chatType);
+		end
+		editBox:SetText(strippedText);
+	end
 
-	local originalBNSendWhisper = BNSendWhisper;
-	BNSendWhisper = function(target, text, ...)
-		if type(text) == "string" then
-			local foundLink, strippedText = StripAchievementChatLinks(text, true);
-			if foundLink then
-				RecordOutgoingAchievementChatMessage(text);
-				return originalBNSendWhisper(target, strippedText, ...);
-			end
-		end
-		return originalBNSendWhisper(target, text, ...);
-	end;
+	EventRegistry:RegisterCallback("ChatFrame.OnEditBoxPreSendText", function(_, editBox)
+		StripOutgoingAchievementLinks(editBox);
+	end, Achievements);
 
 	achievementChatLinksHooked = true;
 end

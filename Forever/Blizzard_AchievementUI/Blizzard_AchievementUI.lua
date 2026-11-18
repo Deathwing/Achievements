@@ -21,6 +21,7 @@ local GetTrackedAchievements = function(...) return AchievementsAddon.GetTracked
 local IsTrackedAchievement = function(...) return AchievementsAddon.IsTrackedAchievement(...); end;
 local RemoveTrackedAchievement = function(...) return AchievementsAddon.RemoveTrackedAchievement(...); end;
 local SetAchievementComparisonUnit = function(...) return AchievementsAddon.SetAchievementComparisonUnit(...); end;
+local WatchFrame_Update = function(...) return AchievementsAddon.WatchFrame_Update(...); end;
 
 local ACHIEVEMENTSUI_FONTHEIGHT;						-- set in AchievementsButton_OnLoad
 -- [[ AchievementsFrame ]] --
@@ -693,11 +694,7 @@ function AchievementsButton_OnClick (self, ignoreModifiers)
 		if ( IsModifiedClick("CHATLINK") and activeChatWindow ) then
 			local achievementLink = GetAchievementLink(self.id);
 			if ( achievementLink ) then
-				if ChatFrameUtil and ChatFrameUtil.InsertLink then
-					ChatFrameUtil.InsertLink(achievementLink);
-				else
-					ChatEdit_InsertLink(achievementLink);
-				end
+				Achievements.InsertChatLink(achievementLink);
 			end
 		elseif ( IsModifiedClick("QUESTWATCHTOGGLE") ) then
 			AchievementsButton_ToggleTracking(self.id);

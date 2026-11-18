@@ -519,7 +519,7 @@ local function HandleAchievementLinkClick(link, fullLink, button)
 	-- Shift-click inserts the link into the focused chat editbox,
 	-- matching default behaviour for item/spell links.
 	if IsModifiedClick("CHATLINK") then
-		if ChatEdit_InsertLink(fullLink or link) then
+		if Achievements.InsertChatLink(fullLink or link) then
 			return true;
 		end
 	end

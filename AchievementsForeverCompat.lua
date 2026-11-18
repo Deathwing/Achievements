@@ -288,6 +288,7 @@ AchievementsForeverUIGlobalNames = {
 	["ACHIEVEMENT_RED_BORDER_COLOR"] = "ACHIEVEMENTS_RED_BORDER_COLOR",
 	["ACHIEVEMENT_TEXTURES_TO_LOAD"] = "ACHIEVEMENTS_TEXTURES_TO_LOAD",
 	["AchievementAlertFrame_OnClick"] = "AchievementsAlertFrame_OnClick",
+	["AchievementAlertSystem"] = "AchievementsAlertSystem",
 	["AchievementButton_Collapse"] = "AchievementsButton_Collapse",
 	["AchievementButton_Desaturate"] = "AchievementsButton_Desaturate",
 	["AchievementButton_DisplayAchievement"] = "AchievementsButton_DisplayAchievement",

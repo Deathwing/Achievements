@@ -41,9 +41,7 @@ local meterTotals = {};
 local pendingMeterSessions = {};
 local pendingDeath = false;
 
-local function IsSecret(value)
-	return issecretvalue ~= nil and issecretvalue(value) == true;
-end
+local IsSecret = Private.IsSecret;
 
 local function PruneExpired(entries, now, window)
 	for key, entry in pairs(entries) do
@@ -134,7 +132,7 @@ local function CreatureGUIDForUnit(unit)
 		return nil;
 	end
 	local guid = UnitGUID(unit);
-	if not guid or IsSecret(guid) then
+	if IsSecret(guid) or not guid then
 		return nil;
 	end
 	local creatureID = Resolvers.GetCreatureIDFromGUID(guid);
@@ -148,17 +146,21 @@ local function PlayerInCombatRecently()
 	return UnitAffectingCombat("player") or (GetTime() - lastCombatEndedAt) < COMBAT_GRACE;
 end
 
+local function Readable(value)
+	return not IsSecret(value) and value;
+end
+
 local function UnitTargetsPlayerGroup(unit)
 	local targetUnit = unit .. "target";
 	if not UnitExists(targetUnit) then
 		return false;
 	end
-	return UnitIsUnit(targetUnit, "player") or UnitIsUnit(targetUnit, "pet") or UnitInParty(targetUnit) or UnitInRaid(targetUnit);
+	return Readable(UnitIsUnit(targetUnit, "player")) or Readable(UnitIsUnit(targetUnit, "pet")) or UnitInParty(targetUnit) or Readable(UnitInRaid(targetUnit));
 end
 
 local function RememberPlayerUnit(unit, guid)
 	local name = UnitName(unit);
-	if name and not IsSecret(name) and UnitCanAttack("player", unit) then
+	if not IsSecret(name) and name and UnitCanAttack("player", unit) then
 		playerGUIDByName[name] = guid;
 		Resolvers.CacheTargetFacts(guid, unit, nil, nil);
 	end
@@ -188,13 +190,13 @@ local function InspectUnit(unit)
 	end
 
 	local name = UnitName(unit);
-	if name and not IsSecret(name) then
+	if not IsSecret(name) and name then
 		creatureIDByName[name] = creatureID;
 	end
 	if not UnitCanAttack("player", unit) or UnitIsTapDenied(unit) then
 		return false;
 	end
-	if UnitAffectingCombat(unit) and (UnitTargetsPlayerGroup(unit) or (UnitAffectingCombat("player") and UnitIsUnit(unit, "target"))) then
+	if UnitAffectingCombat(unit) and (UnitTargetsPlayerGroup(unit) or (UnitAffectingCombat("player") and Readable(UnitIsUnit(unit, "target")))) then
 		engagedUnits[guid] = { creatureID = creatureID, at = now };
 		Resolvers.CacheTargetFacts(guid, unit, nil, creatureID);
 	end
@@ -214,8 +216,8 @@ local function HandleUnitDied(guid)
 	if not creatureID or creatureID == 0 then
 		return false;
 	end
-	local unit = UnitTokenFromGUID and UnitTokenFromGUID(guid) or nil;
-	if unit and not IsSecret(unit) and UnitExists(unit) then
+	local unit = UnitTokenFromGUID and UnitTokenFromGUID(guid);
+	if not IsSecret(unit) and unit and UnitExists(unit) then
 		return InspectUnitSafe(unit);
 	end
 	local engaged = engagedUnits[guid];
@@ -231,10 +233,10 @@ local function RecordEncounterUnits(_, success, encounterUnitStatus)
 	end
 	local recorded = false;
 	for _, status in ipairs(encounterUnitStatus) do
-		local creatureID = type(status) == "table" and status.creatureID or nil;
-		local health = type(status) == "table" and status.remainingHealthPercent or nil;
+		local creatureID = type(status) == "table" and status.creatureID;
+		local health = type(status) == "table" and status.remainingHealthPercent;
 		local survived = not IsSecret(health) and (tonumber(health) or 0) > 0;
-		if not survived and creatureID and not IsSecret(creatureID) and tonumber(creatureID) and tonumber(creatureID) > 0 then
+		if not survived and not IsSecret(creatureID) and creatureID and tonumber(creatureID) and tonumber(creatureID) > 0 then
 			recorded = CreditCreatureKill(nil, tonumber(creatureID), KILL_DEDUPE_WINDOW) or recorded;
 		end
 	end
@@ -256,8 +258,8 @@ local function RecordLootSources()
 				if not IsSecret(guid) and type(guid) == "string" and not creditedKills[guid] then
 					local creatureID = Resolvers.GetCreatureIDFromGUID(guid);
 					if creatureID and creatureID ~= 0 then
-						local unit = UnitTokenFromGUID and UnitTokenFromGUID(guid) or nil;
-						local alive = unit and not IsSecret(unit) and UnitExists(unit) and not UnitIsDead(unit);
+						local unit = UnitTokenFromGUID and UnitTokenFromGUID(guid);
+						local alive = not IsSecret(unit) and unit and UnitExists(unit) and not UnitIsDead(unit);
 						if not alive then
 							recorded = CreditCreatureKill(guid, creatureID) or recorded;
 						end
@@ -323,8 +325,12 @@ local function GetDataCreatureIDByName()
 		return dataCreatureIDByName;
 	end
 	dataCreatureIDByName = {};
-	for creatureID, creature in pairs(Resolvers.creatures or {}) do
-		local name = Achievements.GetClientLocaleText and Achievements.GetClientLocaleText("creatures", creatureID, "name") or creature.name;
+	if not Resolvers.IsEnglishClientLocale() then
+		return dataCreatureIDByName;
+	end
+	for _, criteria in ipairs(Resolvers.GetRecordableCriteriaByType(CRITERIA_TYPE.KILL_NPC)) do
+		local creatureID = tonumber(criteria.asset) or 0;
+		local name = creatureID ~= 0 and Achievements.GetClientLocaleText and Achievements.GetClientLocaleText("creatures", creatureID, "name");
 		if type(name) == "string" and name ~= "" then
 			dataCreatureIDByName[name] = creatureID;
 		end
@@ -389,7 +395,7 @@ end
 local baseRecordPlayerSpellcast = Achievements.RecordPlayerSpellcast;
 Achievements.RecordPlayerSpellcast = function(unit, castGUID, spellID)
 	local handled = baseRecordPlayerSpellcast and baseRecordPlayerSpellcast(unit, castGUID, spellID) or false;
-	if (unit and unit ~= "player") or IsSecret(spellID) then
+	if IsSecret(unit) or IsSecret(spellID) or (unit and unit ~= "player") then
 		return handled;
 	end
 	spellID = tonumber(spellID) or 0;
@@ -403,7 +409,7 @@ Achievements.RecordPlayerSpellcast = function(unit, castGUID, spellID)
 	if Resolvers.RecordCombatCriteriaAsset(CRITERIA_TYPE.CAST_SPELL, spellID, 1, 0.05) then
 		refreshTypes = Resolvers.MarkCriteriaRefreshType(refreshTypes, CRITERIA_TYPE.CAST_SPELL);
 	end
-	local targetGUID = UnitExists("target") and UnitGUID("target") or nil;
+	local targetGUID = UnitGUID("target");
 	if IsSecret(targetGUID) then
 		targetGUID = nil;
 	end
@@ -435,7 +441,7 @@ end
 local baseRecordPlayerAuraCriteria = Achievements.RecordPlayerAuraCriteria;
 Achievements.RecordPlayerAuraCriteria = function(unit)
 	local handled = baseRecordPlayerAuraCriteria and baseRecordPlayerAuraCriteria(unit) or false;
-	if unit and unit ~= "player" then
+	if IsSecret(unit) or (unit and unit ~= "player") then
 		return handled;
 	end
 	local assets = GetIncomingAuraAssets();
@@ -551,6 +557,7 @@ local function GetMeterCriteriaByType()
 	if Enum and Enum.DamageMeterType then
 		METER_CRITERIA_BY_TYPE[Enum.DamageMeterType.DamageDone] = CRITERIA_TYPE.DAMAGE_DEALT;
 		METER_CRITERIA_BY_TYPE[Enum.DamageMeterType.HealingDone] = CRITERIA_TYPE.HEALING_DONE;
+		METER_CRITERIA_BY_TYPE[Enum.DamageMeterType.DamageTaken] = CRITERIA_TYPE.TOTAL_DAMAGE_TAKEN;
 	end
 	return METER_CRITERIA_BY_TYPE;
 end
@@ -624,9 +631,6 @@ local function RecordPlayerCombatText(unit, action, amount)
 	local characterName = Resolvers.GetProgressCharacterName();
 	local refreshTypes;
 	if action == "WOUND" then
-		if Resolvers.RecordCriteriaProgress(CRITERIA_TYPE.TOTAL_DAMAGE_TAKEN, 0, amount, {}, nil) then
-			refreshTypes = Resolvers.MarkCriteriaRefreshType(refreshTypes, CRITERIA_TYPE.TOTAL_DAMAGE_TAKEN);
-		end
 		if Resolvers.SetCriteriaAssetProgressMax(CRITERIA_TYPE.MOST_DAMAGE_TAKEN_IN_SINGLE_HIT, 0, amount, characterName) then
 			refreshTypes = Resolvers.MarkCriteriaRefreshType(refreshTypes, CRITERIA_TYPE.MOST_DAMAGE_TAKEN_IN_SINGLE_HIT);
 		end

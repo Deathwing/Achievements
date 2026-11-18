@@ -4,6 +4,7 @@ if not Achievements then
 end
 
 local Private = Achievements.private;
+local IsSecret = Private.IsSecret;
 local TITLE_DATA = Private.data and Private.data.titles or {};
 local ACHIEVEMENT_DATA = Private.data and Private.data.achievements or {};
 
@@ -351,15 +352,21 @@ local function GetUnitBaseName(unit)
 		return nil;
 	end
 	local name = UnitName(unit);
-	if type(name) == "string" and name ~= "" then
+	if not IsSecret(name) and type(name) == "string" and name ~= "" then
 		return name;
 	end
 	return nil;
 end
 
 local function GetKnownPlayerDisplayName(playerName, unit)
-	if unit and UnitIsUnit(unit, "player") then
-		return GetLocalPlayerDisplayName();
+	if IsSecret(playerName) or IsSecret(unit) then
+		return nil;
+	end
+	if unit then
+		local isLocalUnit = UnitIsUnit(unit, "player");
+		if not IsSecret(isLocalUnit) and isLocalUnit then
+			return GetLocalPlayerDisplayName();
+		end
 	end
 	if playerName and IsLocalName(playerName) then
 		return GetLocalPlayerDisplayName();
@@ -374,7 +381,11 @@ local function GetKnownPlayerDisplayName(playerName, unit)
 
 	local record = GetRemoteTitleRecord(playerName);
 	if record then
-		return FormatTitleName(TITLE_DATA[record.titleID], playerName, unit and UnitSex(unit) or nil);
+		local sex = unit and UnitSex(unit);
+		if IsSecret(sex) then
+			sex = nil;
+		end
+		return FormatTitleName(TITLE_DATA[record.titleID], playerName, sex);
 	end
 	return nil;
 end
@@ -864,12 +875,18 @@ local function SetKnownTitleText(fontString, playerName, unit)
 	if not fontString or not fontString.SetText then
 		return false;
 	end
+	local currentText = fontString.GetText and fontString:GetText();
+	if IsSecret(currentText) then
+		fontString.achievementsTitleApplied = nil;
+		fontString.achievementsTitleDisplayName = nil;
+		return false;
+	end
 	local displayName = GetKnownPlayerDisplayName(playerName, unit);
 	if not displayName or displayName == "" then
 		if fontString.achievementsTitleApplied then
 			local baseName = unit and GetUnitBaseName(unit) or nil;
 			local resetText = baseName or "";
-			if not fontString.GetText or fontString:GetText() ~= resetText then
+			if not fontString.GetText or currentText ~= resetText then
 				fontString.achievementsTitleUpdating = true;
 				fontString:SetText(resetText);
 				fontString.achievementsTitleUpdating = nil;
@@ -879,7 +896,7 @@ local function SetKnownTitleText(fontString, playerName, unit)
 		end
 		return false;
 	end
-	if not fontString.GetText or fontString:GetText() ~= displayName then
+	if not fontString.GetText or currentText ~= displayName then
 		fontString.achievementsTitleUpdating = true;
 		fontString:SetText(displayName);
 		fontString.achievementsTitleUpdating = nil;
@@ -902,7 +919,7 @@ local function HookKnownTitleFontString(fontString, unit)
 		return;
 	end
 	local ok = pcall(hooksecurefunc, fontString, "SetText", function(self, text)
-		if self.achievementsTitleUpdating then
+		if self.achievementsTitleUpdating or IsSecret(text) then
 			return;
 		end
 		local hookedUnit = self.achievementsTitleUnit;
@@ -959,13 +976,20 @@ UpdateTooltipKnownPlayerName = function(tooltip)
 		return;
 	end
 	local tooltipName, unit = tooltip:GetUnit();
+	if IsSecret(tooltipName) or IsSecret(unit) then
+		return;
+	end
 	local displayName = GetKnownPlayerDisplayName(tooltipName, unit);
 	if not displayName or displayName == "" then
 		return;
 	end
 	local tooltipFrameName = tooltip.GetName and tooltip:GetName() or nil;
 	local titleLine = tooltipFrameName and _G[tooltipFrameName .. "TextLeft1"] or nil;
-	if titleLine and titleLine.SetText and (not titleLine.GetText or titleLine:GetText() ~= displayName) then
+	local lineText = titleLine and titleLine.GetText and titleLine:GetText();
+	if IsSecret(lineText) then
+		return;
+	end
+	if titleLine and titleLine.SetText and (not titleLine.GetText or lineText ~= displayName) then
 		DebugTitle("tooltip unit=" .. tostring(unit) .. " tooltipName=" .. tostring(tooltipName) .. " title=" .. tostring(displayName));
 		titleLine:SetText(displayName);
 	end
@@ -991,6 +1015,14 @@ local function HookTooltipTitles()
 	if GameTooltip.HookScript then
 		local ok = pcall(GameTooltip.HookScript, GameTooltip, "OnTooltipSetUnit", UpdateTooltipKnownPlayerName);
 		tooltipUnitHooked = ok == true;
+	end
+	if not tooltipUnitHooked and TooltipDataProcessor and TooltipDataProcessor.AddTooltipPostCall and Enum and Enum.TooltipDataType then
+		TooltipDataProcessor.AddTooltipPostCall(Enum.TooltipDataType.Unit, function(tooltip)
+			if tooltip == GameTooltip then
+				UpdateTooltipKnownPlayerName(tooltip);
+			end
+		end);
+		tooltipUnitHooked = true;
 	end
 	if not tooltipUnitHooked and GameTooltip.SetUnit then
 		local originalSetUnit = GameTooltip.SetUnit;
