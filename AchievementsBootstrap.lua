@@ -53,11 +53,14 @@ RegisterEventSafe("SKILL_LINES_CHANGED");
 RegisterEventSafe("UPDATE_FACTION");
 RegisterEventSafe("BAG_UPDATE_DELAYED");
 RegisterEventSafe("ITEM_PUSH");
+RegisterEventSafe("LOOT_READY");
 RegisterEventSafe("LOOT_OPENED");
+RegisterEventSafe("LOOT_CLOSED");
 RegisterEventSafe("CHAT_MSG_LOOT");
 RegisterEventSafe("CHAT_MSG_MONEY");
 RegisterEventSafe("PLAYER_EQUIPMENT_CHANGED");
 RegisterEventSafe("PLAYERBANKSLOTS_CHANGED");
+RegisterEventSafe("BANKFRAME_OPENED");
 RegisterEventSafe("PLAYER_MONEY");
 -- Forever forbids addon combat log registration.
 if type(CombatLogGetCurrentEventInfo) == "function" then
@@ -71,6 +74,9 @@ RegisterEventSafe("PLAYER_DEAD");
 RegisterEventSafe("PLAYER_PVP_RANK_CHANGED");
 RegisterEventSafe("UPDATE_BATTLEFIELD_STATUS");
 RegisterEventSafe("UPDATE_BATTLEFIELD_SCORE");
+if Achievements.IS_FOREVER then
+	RegisterEventSafe("PVP_MATCH_COMPLETE");
+end
 RegisterEventSafe("BATTLEGROUND_POINTS_UPDATE");
 RegisterEventSafe("PVP_WORLDSTATE_UPDATE");
 RegisterEventSafe("CHAT_MSG_SYSTEM");
@@ -251,9 +257,16 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1, arg2, arg3, arg4, arg5)
 		return;
 	end
 
-	if event == "LOOT_OPENED" or event == "CHAT_MSG_LOOT" then
+	if event == "CHAT_MSG_LOOT" then
 		if Achievements.RecordLootAcquisitionCriteria then
 			Achievements.RecordLootAcquisitionCriteria(arg1);
+		end
+		return;
+	end
+
+	if event == "LOOT_READY" or event == "LOOT_OPENED" or event == "LOOT_CLOSED" then
+		if Achievements.RecordLootWindowCriteria then
+			Achievements.RecordLootWindowCriteria(event);
 		end
 		return;
 	end
@@ -274,6 +287,9 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1, arg2, arg3, arg4, arg5)
 			if Achievements.RecordWorldStateScan then
 				Achievements.RecordWorldStateScan();
 			end
+			if Achievements.RequestBattlefieldObjectiveScore then
+				Achievements.RequestBattlefieldObjectiveScore();
+			end
 			Achievements.RefreshCriteriaAchievements(false);
 		end
 		return;
@@ -283,7 +299,8 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1, arg2, arg3, arg4, arg5)
 		if Achievements.RecordWorldStateScan then
 			Achievements.RecordWorldStateScan();
 		end
-		Achievements.RefreshCriteriaAchievements(false);
+		local recorded = event == "UPDATE_BATTLEFIELD_SCORE" and Achievements.RecordBattlefieldObjectives and Achievements.RecordBattlefieldObjectives();
+		Achievements.RefreshCriteriaAchievements(recorded == true);
 		return;
 	end
 
@@ -294,7 +311,20 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1, arg2, arg3, arg4, arg5)
 		if Achievements.RecordWorldStateScan then
 			Achievements.RecordWorldStateScan();
 		end
+		if Achievements.RequestBattlefieldObjectiveScore then
+			Achievements.RequestBattlefieldObjectiveScore();
+		end
 		Achievements.RefreshCriteriaAchievements(false);
+		return;
+	end
+
+	if event == "PVP_MATCH_COMPLETE" then
+		if Achievements.NoteBattlefieldMatchComplete then
+			Achievements.NoteBattlefieldMatchComplete();
+		end
+		if Achievements.RequestBattlefieldObjectiveScore then
+			Achievements.RequestBattlefieldObjectiveScore();
+		end
 		return;
 	end
 
@@ -338,7 +368,17 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1, arg2, arg3, arg4, arg5)
 		if Achievements.ClearCharacterScanCache then
 			Achievements.ClearCharacterScanCache();
 		end
+		if event == "BAG_UPDATE_DELAYED" and Achievements.BackfillLootedItems then
+			Achievements.BackfillLootedItems(true);
+		end
 		ScheduleCriteriaRefresh(true, 0.35, event);
+		return;
+	end
+
+	if event == "BANKFRAME_OPENED" then
+		if Achievements.BackfillBankLootedItems and Achievements.BackfillBankLootedItems() then
+			ScheduleCriteriaRefresh(true, 0.35, event);
+		end
 		return;
 	end
 
@@ -472,9 +512,12 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1, arg2, arg3, arg4, arg5)
 			Achievements.RecordWorldStateScan();
 		end
 		if Achievements.BackfillCurrentState then
-			Achievements.BackfillCurrentState(arg2 == true);
+			Achievements.BackfillCurrentState(arg2 == true, arg1 == true);
 		else
 			Achievements.RefreshCriteriaAchievements(false);
+		end
+		if Achievements.RequestBattlefieldObjectiveScore then
+			Achievements.RequestBattlefieldObjectiveScore();
 		end
 		if Achievements.ScheduleEndFirstLoginInitialGrant then
 			Achievements.ScheduleEndFirstLoginInitialGrant();
@@ -490,6 +533,9 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1, arg2, arg3, arg4, arg5)
 		end
 		if Achievements.RecordBattlegroundWin then
 			Achievements.RecordBattlegroundWin();
+		end
+		if Achievements.RequestBattlefieldObjectiveScore then
+			Achievements.RequestBattlefieldObjectiveScore();
 		end
 		if Achievements.RecordArenaParticipation then
 			Achievements.RecordArenaParticipation();

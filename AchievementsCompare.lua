@@ -30,6 +30,7 @@ end
 
 local Private = Achievements.private;
 local IsSecret = Private.IsSecret;
+local IS_FOREVER = Achievements.IS_FOREVER;
 
 local ADDON_PREFIX = "ACHV";
 local PROTOCOL_VERSION = "2";
@@ -49,6 +50,9 @@ local pendingRequests = {};      -- normalisedTargetName -> { startTime, target,
 local lastRequestTimes = {};     -- normalisedTargetName -> last outgoing CMP_REQ timestamp
 
 local function StripRealmSuffix(name)
+	if IS_FOREVER then
+		return Private.NormaliseForeverName(name);
+	end
 	if type(name) ~= "string" or name == "" then
 		return nil;
 	end
@@ -56,7 +60,7 @@ local function StripRealmSuffix(name)
 end
 
 local function NameIncludesRealm(name)
-	return type(name) == "string" and name:find("%-") ~= nil;
+	return not IS_FOREVER and type(name) == "string" and name:find("%-") ~= nil;
 end
 
 local function DebugValue(value)
@@ -75,6 +79,9 @@ local function DebugCompare(message)
 end
 
 local function NormaliseName(name, preserveRealm)
+	if IS_FOREVER then
+		return Private.NormaliseForeverName(name);
+	end
 	if type(name) ~= "string" or name == "" then
 		return nil;
 	end
@@ -101,6 +108,9 @@ local function GetPendingRequestKey(name, hasRealm)
 end
 
 local function GetLocalRealmName()
+	if IS_FOREVER then
+		return nil;
+	end
 	local realmName = GetRealmName();
 	if realmName and realmName ~= "" then
 		return realmName;
@@ -145,6 +155,13 @@ local function ResolveTargetFromGUIDValue(guid, fallbackName)
 		return nil;
 	end
 	local ok, _, _, _, _, _, playerName, realmName = pcall(GetPlayerInfoByGUID, guid);
+	if IS_FOREVER then
+		local target = ok and NormaliseName(playerName) or nil;
+		if target then
+			return target, false;
+		end
+		return nil;
+	end
 	if ok and playerName and playerName ~= "" and NameIncludesRealm(playerName) then
 		local target = NormaliseName(playerName, true);
 		DebugCompare("unit guid resolved full playerName guid=" .. DebugValue(guid) .. " target=" .. DebugValue(target));
@@ -246,6 +263,13 @@ end
 
 ResolveTargetFromUnit = function(unit)
 	if IsSecret(unit) or not unit then
+		return nil;
+	end
+	if IS_FOREVER then
+		local target = Private.UnitFullName(unit) or ResolveTargetFromGUID(unit);
+		if target then
+			return target, false;
+		end
 		return nil;
 	end
 	local shortName;
@@ -551,6 +575,11 @@ local function HandleResponse(messageType, payload, senderName)
 			request = key and pendingRequests[key];
 		end
 	end
+	if not request and IS_FOREVER then
+		local firstNameKey = key:match("^(%S+) ");
+		request = firstNameKey and pendingRequests[firstNameKey];
+		key = request and firstNameKey or key;
+	end
 	if not request then
 		return;
 	end
@@ -658,7 +687,7 @@ function Achievements.RequestAchievementComparison(target, unit, forceShortName)
 	local normalised = NormaliseName(resolvedTarget, resolvedHasRealm);
 	local targetHasRealm = resolvedHasRealm or NameIncludesRealm(normalised);
 	local sendTarget = normalised;
-	if sendTarget and not targetHasRealm and not unit then
+	if sendTarget and not targetHasRealm and not unit and not IS_FOREVER then
 		local lowerTarget = string.lower(sendTarget);
 		if lowerTarget ~= sendTarget then
 			DebugCompare("request short send lowercased normalised=" .. DebugValue(sendTarget) .. " sendTarget=" .. DebugValue(lowerTarget));
@@ -729,6 +758,24 @@ end
 -- through Menu.ModifyMenu instead of mutating UnitPopupAchievementButtonMixin,
 -- which can taint Blizzard's menu construction path.
 
+local function GetForeverContextTarget(contextData)
+	local target = Private.UnitFullName(contextData.unit);
+	if target then
+		return target;
+	end
+	local name, surname = contextData.name, contextData.surname;
+	if IsSecret(name) or IsSecret(surname) then
+		return nil;
+	end
+	if type(name) == "string" and name ~= "" then
+		if type(surname) == "string" and surname ~= "" and not name:find("[%s%-]") then
+			name = name .. " " .. surname;
+		end
+		return NormaliseName(name);
+	end
+	return (ResolveTargetFromPlayerLocation(contextData.playerLocation));
+end
+
 local function ResolveTargetFromContext(contextData)
 	if not contextData then
 		DebugCompare("context resolve no contextData");
@@ -736,6 +783,11 @@ local function ResolveTargetFromContext(contextData)
 	end
 	if IsSecret(contextData.name) or IsSecret(contextData.server) or IsSecret(contextData.unit) then
 		return nil;
+	end
+	if IS_FOREVER then
+		local target = GetForeverContextTarget(contextData);
+		DebugCompare("context forever name=" .. DebugValue(contextData.name) .. " surname=" .. DebugValue(contextData.surname) .. " final=" .. DebugValue(target));
+		return target;
 	end
 	local contextSummary = {};
 	if type(contextData) == "table" then
@@ -822,6 +874,10 @@ local function CanCompareContext(contextData)
 		if not IsSecret(guid) and guid then
 			return guid ~= UnitGUID("player");
 		end
+	end
+	if IS_FOREVER then
+		local target = GetForeverContextTarget(contextData);
+		return target ~= nil and not Private.IsSelfName(target);
 	end
 	local name = contextData.name;
 	if not name or name == "" then

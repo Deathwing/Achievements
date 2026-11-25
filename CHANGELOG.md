@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.2.2 - 2026-11-25
+
+- Battleground objective achievements (flag captures, bases, graveyards, towers) now count.
+- Fixed wrongly awarded achievements: The Fishing Diplomat, Wrecking Ball and battleground wins counted twice after a reload.
+- Burning Crusade Anniversary: arena wins and losses are now read from your own team.
+- Achievements for looting a specific item no longer count bought or traded items.
+- Epic and legendary item statistics count only your own items.
+- The other faction's achievements no longer collect progress.
+- World and continent kill statistics now count kills in the Eastern Kingdoms.
+- A player from another realm with your name no longer shows your title.
+- WoW Forever: skinning, gathering or pick-pocketing a corpse no longer counts as a kill.
+- WoW Forever: titles, Compare and /ach-fetch now handle first name plus surname, and your own messages are recognised.
+- Achievements and progress you already have stay as they are.
+
 ## 1.2.1 - 2026-11-19
 
 - Battleground achievements with a condition, such as Arathi Basin Perfection, We Had It All Along *cough*, Resilient Victory or Warsong Gulch Perfection, are no longer awarded for any win. They now need their condition at the moment you win, and a score the addon cannot read never counts. Resilient Victory now works for every race, and every battleground win counts again, not only the first one per battleground until a reload.

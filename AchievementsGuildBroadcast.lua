@@ -4,6 +4,7 @@ if not Achievements then
 end
 
 local Private = Achievements.private;
+local IS_FOREVER = Achievements.IS_FOREVER;
 
 local ADDON_PREFIX = "ACHV";
 local MESSAGE_VERSION = "2";
@@ -96,7 +97,7 @@ end
 local function Broadcast(achievementID, channel)
 	local id = tonumber(achievementID);
 	if not id then return end
-	local playerName = UnitName("player") or "";
+	local playerName = (IS_FOREVER and Private.UnitFullName("player")) or UnitName("player") or "";
 	local _, classFile = UnitClass("player");
 	classFile = classFile or "";
 	local _, _, _, completed, month, day, year = Achievements.GetAchievementInfo(id);
@@ -157,13 +158,19 @@ local function HandleIncomingBroadcast(payload, sender, channel)
 
 	-- Don't echo our own broadcast back to ourselves; the local PrintMessage
 	-- already handled it from MarkAchievementComplete.
-	local localName = UnitName("player");
-	local shortDisplayName = displayName;
-	if shortDisplayName then
-		shortDisplayName = Ambiguate(shortDisplayName, "none");
-	end
-	if localName and shortDisplayName and string.lower(shortDisplayName) == string.lower(localName) then
-		return;
+	if IS_FOREVER then
+		if Private.IsSelfName(displayName) then
+			return;
+		end
+	else
+		local localName = UnitName("player");
+		local shortDisplayName = displayName;
+		if shortDisplayName then
+			shortDisplayName = Ambiguate(shortDisplayName, "none");
+		end
+		if localName and shortDisplayName and string.lower(shortDisplayName) == string.lower(localName) then
+			return;
+		end
 	end
 
 	if not Private.FormatAchievementBroadcast then
@@ -282,6 +289,9 @@ local function GetShortPlayerName(name)
 end
 
 local function IsLocalPlayerName(name)
+	if IS_FOREVER then
+		return Private.IsSelfName(name);
+	end
 	local localName = UnitName("player");
 	local shortName = GetShortPlayerName(name);
 	return localName and shortName and string.lower(localName) == string.lower(shortName);
@@ -429,7 +439,7 @@ local function ShowAchievementRefTooltip(achievementID, fullLink)
 
 	local linkPlayer, linkCompleted, linkMonth, linkDay, linkYear, hasLinkPayload, criteriaProgress = ParseAchievementLinkPayload(fullLink);
 
-	local localName = UnitName("player");
+	local localName = (IS_FOREVER and Private.UnitFullName("player")) or UnitName("player");
 	local isOtherPlayerLink = linkPlayer and not IsLocalPlayerName(linkPlayer);
 	local displayName = linkPlayer or localName or "";
 	local ownerCriteriaCount = Achievements.GetAchievementNumCriteria

@@ -22,14 +22,27 @@ local PRUNE_INTERVAL = 60;
 local PENDING_DEAD_WINDOW = 30;
 local METER_SESSION_WINDOW = 3600;
 local NAME_CACHE_LIMIT = 2000;
+local GATHER_CAST_WINDOW = 10;
+local GATHER_LOOT_WINDOW = 2;
+local LOOTED_CORPSE_WINDOW = 3600;
+-- A creature credited without a GUID stands for its next GUID credit within `match` s, or within `window` s for a corpse looted or not seen alive since.
+local BLIND_XP_LINE = { match = NAME_KILL_WINDOW, window = 600 };
+local BLIND_ENCOUNTER = { match = KILL_DEDUPE_WINDOW, window = 3600 };
+-- Forever 1.60.1 spells with a SKINNING (true) or PICKPOCKET ("pocket") effect.
+local GATHER_LOOT_SPELLS = {
+	[921] = "pocket", [5967] = "pocket",
+	[8613] = true, [8617] = true, [8618] = true, [10768] = true,
+	[1235230] = true, [1235236] = true, [1235244] = true,
+};
 
 local creditedKills = {};
 local creditedCreatureAt = {};
-local nameCreditedAt = {};
+local blindCredits = {};
 local engagedUnits = {};
 local pendingDeadUnits = {};
 local creatureIDByName = {};
 local playerGUIDByName = {};
+local playerGUIDByFirstName = {};
 local dataCreatureIDByName;
 local lastCombatEndedAt = 0;
 local lastPruneAt = 0;
@@ -40,6 +53,9 @@ local knownIncomingAuras = {};
 local meterTotals = {};
 local pendingMeterSessions = {};
 local pendingDeath = false;
+local gatherCast;
+local gatherLootWindow = false;
+local lootedCorpses = {};
 
 local IsSecret = Private.IsSecret;
 
@@ -70,9 +86,19 @@ local function PruneState(now)
 	lastPruneAt = now;
 	PruneExpired(creditedKills, now, KILL_DEDUPE_WINDOW);
 	PruneExpired(creditedCreatureAt, now, KILL_DEDUPE_WINDOW);
-	PruneExpired(nameCreditedAt, now, NAME_KILL_WINDOW);
+	for creatureID, tokens in pairs(blindCredits) do
+		for index = #tokens, 1, -1 do
+			if now - tokens[index].at > tokens[index].window then
+				table.remove(tokens, index);
+			end
+		end
+		if #tokens == 0 then
+			blindCredits[creatureID] = nil;
+		end
+	end
 	PruneExpired(engagedUnits, now, ENGAGED_WINDOW);
 	PruneExpired(pendingDeadUnits, now, PENDING_DEAD_WINDOW);
+	PruneExpired(lootedCorpses, now, LOOTED_CORPSE_WINDOW);
 	for sessionID, totals in pairs(meterTotals) do
 		if not pendingMeterSessions[sessionID] and now - (totals.at or 0) > METER_SESSION_WINDOW then
 			meterTotals[sessionID] = nil;
@@ -80,6 +106,97 @@ local function PruneState(now)
 	end
 	CapNameCache(creatureIDByName);
 	CapNameCache(playerGUIDByName);
+	CapNameCache(playerGUIDByFirstName);
+end
+
+local function SaveEntries(entries, now, serverNow, window)
+	local saved;
+	for key, entry in pairs(entries) do
+		local at = type(entry) == "table" and entry.at or entry;
+		local keep = type(entry) == "table" and entry.window or window;
+		if now - at <= keep then
+			local savedAt = serverNow - math.floor(now - at);
+			saved = saved or {};
+			saved[key] = type(entry) == "table" and { at = savedAt, window = keep } or savedAt;
+		end
+	end
+	return saved;
+end
+
+local function RestoreEntries(entries, saved, now, serverNow, window)
+	if type(saved) ~= "table" then
+		return;
+	end
+	for key, entry in pairs(saved) do
+		local savedAt = tonumber(type(entry) == "table" and entry.at or entry);
+		local keep = type(entry) == "table" and math.min(tonumber(entry.window) or 0, window) or window;
+		if savedAt and entries[key] == nil and serverNow - savedAt <= keep then
+			local at = now - math.max(serverNow - savedAt, 0);
+			entries[key] = type(entry) == "table" and { at = at, window = keep } or at;
+		end
+	end
+end
+
+local function SaveBlindCredits(now, serverNow)
+	local saved;
+	for creatureID, tokens in pairs(blindCredits) do
+		for _, token in ipairs(tokens) do
+			if now - token.at <= token.window then
+				saved = saved or {};
+				saved[creatureID] = saved[creatureID] or {};
+				table.insert(saved[creatureID], { at = serverNow - math.floor(now - token.at), match = token.match, window = token.window });
+			end
+		end
+	end
+	return saved;
+end
+
+local function RestoreBlindCredits(saved, now, serverNow)
+	if type(saved) ~= "table" then
+		return;
+	end
+	for key, tokens in pairs(saved) do
+		local creatureID = tonumber(key);
+		if creatureID and type(tokens) == "table" and not blindCredits[creatureID] then
+			for _, token in ipairs(tokens) do
+				local savedAt = type(token) == "table" and tonumber(token.at);
+				local window = savedAt and math.min(tonumber(token.window) or 0, BLIND_ENCOUNTER.window);
+				if savedAt and serverNow - savedAt <= window then
+					blindCredits[creatureID] = blindCredits[creatureID] or {};
+					table.insert(blindCredits[creatureID], { at = now - math.max(serverNow - savedAt, 0), match = math.min(tonumber(token.match) or 0, window), window = window });
+				end
+			end
+		end
+	end
+end
+
+-- Saved as server times: GetTime restarts with the computer.
+local function SaveKillCredit()
+	local db = rawget(_G, "AchievementsCharacterDB");
+	if type(db) ~= "table" then
+		return;
+	end
+	local now, serverNow = GetTime(), GetServerTime();
+	local saved = {
+		lootedCorpses = SaveEntries(lootedCorpses, now, serverNow, LOOTED_CORPSE_WINDOW),
+		creditedKills = SaveEntries(creditedKills, now, serverNow, KILL_DEDUPE_WINDOW),
+		creditedCreatureAt = SaveEntries(creditedCreatureAt, now, serverNow, KILL_DEDUPE_WINDOW),
+		blindCredits = SaveBlindCredits(now, serverNow),
+	};
+	db.foreverKillCredit = next(saved) and saved or nil;
+end
+
+local function RestoreKillCredit()
+	local db = rawget(_G, "AchievementsCharacterDB");
+	local saved = type(db) == "table" and db.foreverKillCredit;
+	if type(saved) ~= "table" then
+		return;
+	end
+	local now, serverNow = GetTime(), GetServerTime();
+	RestoreEntries(lootedCorpses, saved.lootedCorpses, now, serverNow, LOOTED_CORPSE_WINDOW);
+	RestoreEntries(creditedKills, saved.creditedKills, now, serverNow, KILL_DEDUPE_WINDOW);
+	RestoreEntries(creditedCreatureAt, saved.creditedCreatureAt, now, serverNow, KILL_DEDUPE_WINDOW);
+	RestoreBlindCredits(saved.blindCredits, now, serverNow);
 end
 
 local function ScheduleRefresh(refreshTypes, reason)
@@ -88,7 +205,28 @@ local function ScheduleRefresh(refreshTypes, reason)
 	end
 end
 
-local function CreditCreatureKill(guid, creatureID, creatureWindow)
+-- A corpse not seen alive since the token may be its kill; the matching token that ends first is used up.
+local function TakeBlindCredit(creatureID, now, fromLoot, aliveAt)
+	local tokens = blindCredits[creatureID];
+	local pick;
+	for index, token in ipairs(tokens or {}) do
+		local age = now - token.at;
+		local matches = age < token.match or (age < token.window and not (aliveAt and aliveAt > token.at));
+		if matches and (not pick or token.at + token.window < tokens[pick].at + tokens[pick].window) then
+			pick = index;
+		end
+	end
+	if not pick then
+		return false;
+	end
+	table.remove(tokens, pick);
+	if #tokens == 0 then
+		blindCredits[creatureID] = nil;
+	end
+	return true;
+end
+
+local function CreditCreatureKill(guid, creatureID, blindSource, fromLoot)
 	local now = GetTime();
 	PruneState(now);
 	if guid then
@@ -96,18 +234,20 @@ local function CreditCreatureKill(guid, creatureID, creatureWindow)
 			return false;
 		end
 		creditedKills[guid] = now;
+		-- A credited corpse never credits from loot again.
+		lootedCorpses[guid] = now;
+		local engaged = engagedUnits[guid];
 		engagedUnits[guid] = nil;
 		pendingDeadUnits[guid] = nil;
-		local blind = nameCreditedAt[creatureID];
-		if blind and now - blind.at < blind.window then
-			nameCreditedAt[creatureID] = nil;
+		if TakeBlindCredit(creatureID, now, fromLoot, engaged and engaged.at) then
 			return false;
 		end
 	else
-		if creditedCreatureAt[creatureID] and now - creditedCreatureAt[creatureID] < creatureWindow then
+		if creditedCreatureAt[creatureID] and now - creditedCreatureAt[creatureID] < blindSource.match then
 			return false;
 		end
-		nameCreditedAt[creatureID] = { at = now, window = creatureWindow };
+		blindCredits[creatureID] = blindCredits[creatureID] or {};
+		table.insert(blindCredits[creatureID], { at = now, match = blindSource.match, window = blindSource.window });
 	end
 	creditedCreatureAt[creatureID] = now;
 
@@ -161,7 +301,14 @@ end
 local function RememberPlayerUnit(unit, guid)
 	local name = UnitName(unit);
 	if not IsSecret(name) and name and UnitCanAttack("player", unit) then
-		playerGUIDByName[name] = guid;
+		local fullName = Private.UnitFullName(unit);
+		if fullName then
+			playerGUIDByName[fullName] = guid;
+		end
+		-- First names of surnamed players are read only when no exact name matches.
+		if fullName ~= name then
+			playerGUIDByFirstName[name] = guid;
+		end
 		Resolvers.CacheTargetFacts(guid, unit, nil, nil);
 	end
 end
@@ -237,14 +384,73 @@ local function RecordEncounterUnits(_, success, encounterUnitStatus)
 		local health = type(status) == "table" and status.remainingHealthPercent;
 		local survived = not IsSecret(health) and (tonumber(health) or 0) > 0;
 		if not survived and not IsSecret(creatureID) and creatureID and tonumber(creatureID) and tonumber(creatureID) > 0 then
-			recorded = CreditCreatureKill(nil, tonumber(creatureID), KILL_DEDUPE_WINDOW) or recorded;
+			recorded = CreditCreatureKill(nil, tonumber(creatureID), BLIND_ENCOUNTER) or recorded;
 		end
 	end
 	return recorded;
 end
 
+local function NoteGatherCast(unit, castGUID, spellID, succeeded)
+	local kind = IsSecret(spellID) and "secret" or GATHER_LOOT_SPELLS[tonumber(spellID) or 0];
+	if (not IsSecret(unit) and unit and unit ~= "player") or not kind then
+		return;
+	end
+	castGUID = Readable(castGUID) or nil;
+	local expires = GetTime() + (succeeded and GATHER_LOOT_WINDOW or GATHER_CAST_WINDOW);
+	local cast = gatherCast;
+	-- A known gather cast keeps its SENT/START window when SUCCEEDED comes.
+	if cast and kind ~= "secret" and kind == cast.kind and castGUID == cast.castGUID and (castGUID or not cast.looted) then
+		cast.succeeded = cast.succeeded or succeeded;
+		cast.expires = math.max(cast.expires, expires);
+		return;
+	end
+	if cast and cast.looted and castGUID and castGUID == cast.castGUID then
+		return;
+	end
+	-- A live mark whose window has not opened stays behind the new mark until that cast succeeds.
+	local live = cast and not cast.looted and GetTime() <= cast.expires and cast;
+	local carried = cast and not cast.succeeded and cast.previous;
+	local previous = (carried and not carried.looted and GetTime() <= carried.expires and carried) or live or nil;
+	if previous then
+		previous.previous = nil;
+	end
+	gatherCast = { castGUID = castGUID, expires = expires, succeeded = succeeded, kind = kind, previous = previous };
+end
+
+local function EndGatherCast(castGUID)
+	if not gatherCast or IsSecret(castGUID) or not castGUID then
+		return;
+	end
+	local previous = gatherCast.previous;
+	if not gatherCast.succeeded and castGUID == gatherCast.castGUID then
+		gatherCast = previous;
+	elseif previous and not previous.succeeded and castGUID == previous.castGUID then
+		gatherCast.previous = nil;
+	end
+end
+
+local function IsGatherLootWindow()
+	local cast = gatherCast;
+	local kind = cast and cast.kind;
+	local previous = cast and not cast.succeeded and cast.previous;
+	if previous and not previous.looted and GetTime() <= previous.expires then
+		-- The window may be either cast's; the stricter kind wins.
+		kind = (kind == true or previous.kind == true) or ((kind == "secret" or previous.kind == "secret") and "secret" or "pocket");
+		cast = previous;
+	end
+	if not gatherLootWindow and cast and not cast.looted and GetTime() <= cast.expires then
+		cast.looted = true;
+		gatherLootWindow = kind;
+	end
+	return gatherLootWindow;
+end
+
 local function RecordLootSources()
 	if not GetNumLootItems or not GetLootSourceInfo then
+		return false;
+	end
+	local gathering = IsGatherLootWindow();
+	if gathering == "secret" then
 		return false;
 	end
 	local recorded = false;
@@ -255,13 +461,18 @@ local function RecordLootSources()
 		if ok then
 			for index = 1, #sources, 2 do
 				local guid = sources[index];
-				if not IsSecret(guid) and type(guid) == "string" and not creditedKills[guid] then
+				if not IsSecret(guid) and type(guid) == "string" then
 					local creatureID = Resolvers.GetCreatureIDFromGUID(guid);
 					if creatureID and creatureID ~= 0 then
 						local unit = UnitTokenFromGUID and UnitTokenFromGUID(guid);
-						local alive = not IsSecret(unit) and unit and UnitExists(unit) and not UnitIsDead(unit);
-						if not alive then
-							recorded = CreditCreatureKill(guid, creatureID) or recorded;
+						local seen = not IsSecret(unit) and unit and UnitExists(unit);
+						local alive = seen and not UnitIsDead(unit);
+						-- Pick-pocket victims are alive; a corpse looted once never credits from loot again.
+						if not alive and (seen or gathering ~= "pocket") then
+							if gathering ~= true and not creditedKills[guid] and not lootedCorpses[guid] then
+								recorded = CreditCreatureKill(guid, creatureID, nil, true) or recorded;
+							end
+							lootedCorpses[guid] = GetTime();
 						end
 					end
 				end
@@ -349,7 +560,7 @@ local function CreditConfirmedKill(creatureID)
 	if confirmedGUID then
 		return CreditCreatureKill(confirmedGUID, creatureID);
 	end
-	return CreditCreatureKill(nil, creatureID, NAME_KILL_WINDOW);
+	return CreditCreatureKill(nil, creatureID, BLIND_XP_LINE);
 end
 
 local function RecordXPGainKill(message)
@@ -374,7 +585,8 @@ local function RecordHonorGainKill(message)
 	if not name then
 		return false;
 	end
-	local ctx = Resolvers.BuildKillCombatContext(UnitGUID("player"), nil, playerGUIDByName[name], nil, nil);
+	name = Private.NormaliseForeverName(name) or name;
+	local ctx = Resolvers.BuildKillCombatContext(UnitGUID("player"), nil, playerGUIDByName[name] or playerGUIDByFirstName[name], nil, nil);
 	ctx.targetIsPlayer = true;
 	ctx.targetIsEnemy = true;
 	local refreshTypes;
@@ -382,9 +594,7 @@ local function RecordHonorGainKill(message)
 	if Resolvers.RecordCriteriaEvent(CRITERIA_TYPE.HONORABLE_KILL, 0, ctx) then
 		refreshTypes = Resolvers.MarkCriteriaRefreshType(refreshTypes, CRITERIA_TYPE.HONORABLE_KILL);
 	end
-	if ctx.zoneAreaID and Resolvers.RecordCriteriaEvent(CRITERIA_TYPE.KILL_PLAYER_IN_AREA, ctx.zoneAreaID, ctx) then
-		refreshTypes = Resolvers.MarkCriteriaRefreshType(refreshTypes, CRITERIA_TYPE.KILL_PLAYER_IN_AREA);
-	end
+	refreshTypes = Resolvers.RecordKillInPlayerArea(refreshTypes, ctx);
 	if Resolvers.RecordCriteriaEvent(CRITERIA_TYPE.KILL_PLAYER_NO_HONOR_CHECK, 0, ctx) then
 		refreshTypes = Resolvers.MarkCriteriaRefreshType(refreshTypes, CRITERIA_TYPE.KILL_PLAYER_NO_HONOR_CHECK);
 	end
@@ -395,6 +605,7 @@ end
 local baseRecordPlayerSpellcast = Achievements.RecordPlayerSpellcast;
 Achievements.RecordPlayerSpellcast = function(unit, castGUID, spellID)
 	local handled = baseRecordPlayerSpellcast and baseRecordPlayerSpellcast(unit, castGUID, spellID) or false;
+	NoteGatherCast(unit, castGUID, spellID, true);
 	if IsSecret(unit) or IsSecret(spellID) or (unit and unit ~= "player") then
 		return handled;
 	end
@@ -662,12 +873,20 @@ RegisterEventSafe("NAME_PLATE_UNIT_ADDED");
 RegisterEventSafe("UNIT_DIED");
 RegisterEventSafe("LOOT_READY");
 RegisterEventSafe("LOOT_OPENED");
+RegisterEventSafe("LOOT_CLOSED");
 RegisterEventSafe("CHAT_MSG_COMBAT_XP_GAIN");
 RegisterEventSafe("CHAT_MSG_COMBAT_HONOR_GAIN");
 RegisterEventSafe("PLAYER_REGEN_ENABLED");
 RegisterEventSafe("DAMAGE_METER_COMBAT_SESSION_UPDATED");
 RegisterEventSafe("DAMAGE_METER_RESET");
+RegisterEventSafe("ADDON_LOADED");
+RegisterEventSafe("PLAYER_LOGOUT");
 pcall(eventFrame.RegisterUnitEvent, eventFrame, "UNIT_COMBAT", "player");
+pcall(eventFrame.RegisterUnitEvent, eventFrame, "UNIT_SPELLCAST_SENT", "player");
+pcall(eventFrame.RegisterUnitEvent, eventFrame, "UNIT_SPELLCAST_START", "player");
+pcall(eventFrame.RegisterUnitEvent, eventFrame, "UNIT_SPELLCAST_FAILED", "player");
+pcall(eventFrame.RegisterUnitEvent, eventFrame, "UNIT_SPELLCAST_FAILED_QUIET", "player");
+pcall(eventFrame.RegisterUnitEvent, eventFrame, "UNIT_SPELLCAST_INTERRUPTED", "player");
 pcall(eventFrame.RegisterUnitEvent, eventFrame, "UNIT_HEALTH", "target", "focus");
 pcall(eventFrame.RegisterUnitEvent, eventFrame, "UNIT_FLAGS", "target", "focus");
 pcall(eventFrame.RegisterUnitEvent, eventFrame, "UNIT_TARGET", "target", "focus");
@@ -699,6 +918,14 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1, arg2, arg3, arg4, arg5,
 		pcall(RecordEncounterUnits, arg1, arg5, arg6);
 	elseif event == "LOOT_READY" or event == "LOOT_OPENED" then
 		pcall(RecordLootSources);
+	elseif event == "LOOT_CLOSED" then
+		gatherLootWindow = false;
+	elseif event == "UNIT_SPELLCAST_SENT" then
+		NoteGatherCast(arg1, arg3, arg4, false);
+	elseif event == "UNIT_SPELLCAST_START" then
+		NoteGatherCast(arg1, arg2, arg3, false);
+	elseif event == "UNIT_SPELLCAST_FAILED" or event == "UNIT_SPELLCAST_FAILED_QUIET" or event == "UNIT_SPELLCAST_INTERRUPTED" then
+		EndGatherCast(arg2);
 	elseif event == "CHAT_MSG_COMBAT_XP_GAIN" then
 		pcall(RecordXPGainKill, arg1);
 	elseif event == "CHAT_MSG_COMBAT_HONOR_GAIN" then
@@ -711,6 +938,12 @@ eventFrame:SetScript("OnEvent", function(_, event, arg1, arg2, arg3, arg4, arg5,
 	elseif event == "DAMAGE_METER_RESET" then
 		meterTotals = {};
 		pendingMeterSessions = {};
+	elseif event == "ADDON_LOADED" then
+		if arg1 == "Achievements" then
+			pcall(RestoreKillCredit);
+		end
+	elseif event == "PLAYER_LOGOUT" then
+		pcall(SaveKillCredit);
 	end
 end);
 

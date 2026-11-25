@@ -290,6 +290,10 @@ local function IsLocalChatSender(event, sender)
 		return true;
 	end
 
+	if Achievements.IS_FOREVER then
+		return Achievements.private.IsSelfName(sender);
+	end
+
 	local playerName = UnitName("player");
 	if not playerName or not sender then
 		return false;

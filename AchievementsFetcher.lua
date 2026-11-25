@@ -4,6 +4,7 @@ if not Achievements then
 end
 
 local Private = Achievements.private;
+local IS_FOREVER = Achievements.IS_FOREVER;
 
 local ADDON_PREFIX = "ACHV";
 local PROTOCOL_VERSION = "2";
@@ -16,7 +17,7 @@ local pendingRequests = {};
 local fetcherNamesSanitised;
 
 local function NameIncludesRealm(name)
-	return type(name) == "string" and name:find("%-") ~= nil;
+	return not IS_FOREVER and type(name) == "string" and name:find("%-") ~= nil;
 end
 
 local function GetNow()
@@ -28,6 +29,9 @@ local function CallAfter(delay, callback)
 end
 
 local function NormaliseName(name)
+	if IS_FOREVER then
+		return Private.NormaliseForeverName(name);
+	end
 	if type(name) ~= "string" or name == "" then
 		return nil;
 	end
@@ -71,6 +75,9 @@ local function SanitiseStoredFetcherPlayers(players)
 end
 
 local function IsLocalName(name)
+	if IS_FOREVER then
+		return Private.IsSelfName(name);
+	end
 	local localName = UnitName("player");
 	if not localName then
 		return false;
@@ -220,6 +227,17 @@ local function HandleArmoryMessage(messageType, payload, sender)
 		if protocolVersion ~= PROTOCOL_VERSION then
 			return;
 		end
+		if not request then
+			-- The reply also ends an unanswered request typed in another case or, on Forever, by first name only.
+			local lowerKey = string.lower(key);
+			local firstName = IS_FOREVER and lowerKey:match("^(%S+) ");
+			for pendingKey, pending in pairs(pendingRequests) do
+				local lowerPending = string.lower(pendingKey);
+				if not pending.points and (lowerPending == lowerKey or lowerPending == firstName) then
+					pendingRequests[pendingKey] = nil;
+				end
+			end
+		end
 		request = request or { target = sender, startedAt = GetNow() };
 		request.version = addonVersion;
 		request.mainVersion = addonVersion;
@@ -294,7 +312,7 @@ local function RequestPlayer(target)
 		end
 	end
 	if not preserveTargetRealm then
-		sendTarget = string.lower(key);
+		sendTarget = IS_FOREVER and key or string.lower(key);
 	end
 	pendingRequests[key] = {
 		target = key,

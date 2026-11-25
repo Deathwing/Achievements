@@ -1424,6 +1424,58 @@ local function CriteriaTreeAppliesToPlayer(criteriaTree)
 	return true;
 end
 
+-- FACTION_ALLIANCE or FACTION_HORDE when only that faction's achievements use the criteria.
+function Resolvers.GetCriteriaFaction(criteriaID)
+	if not Resolvers.criteriaFactions then
+		local factions = {};
+		for achievementID, criteriaTreeIDs in pairs(data.criteriaByAchievement) do
+			local achievement = ACHIEVEMENT_DATA[achievementID];
+			local faction = achievement and tonumber(achievement.faction) or -1;
+			for _, criteriaTreeID in ipairs(criteriaTreeIDs) do
+				local id = CRITERIA_TREE_DATA[criteriaTreeID] and tonumber(CRITERIA_TREE_DATA[criteriaTreeID].criteriaID);
+				if id and id ~= 0 then
+					factions[id] = (factions[id] == nil or factions[id] == faction) and faction or -1;
+				end
+			end
+		end
+		Resolvers.criteriaFactions = factions;
+	end
+	local faction = Resolvers.criteriaFactions[tonumber(criteriaID)];
+	return (faction == FACTION_ALLIANCE or faction == FACTION_HORDE) and faction or nil;
+end
+
+function Resolvers.CriteriaFactionAllowsProgress(criteriaID)
+	local faction = Resolvers.GetCriteriaFaction(criteriaID);
+	return faction == nil or faction == GetPlayerFaction();
+end
+
+-- Only the first faction change can find progress recorded for the other faction (before 1.2.2); it is set aside once.
+function Resolvers.CheckFactionChange()
+	local db = rawget(_G, "AchievementsCharacterDB");
+	if type(db) ~= "table" or Resolvers.factionCheckedDB == db then
+		return;
+	end
+	local faction = GetPlayerFaction();
+	if faction == nil then
+		return;
+	end
+	Resolvers.factionCheckedDB = db;
+	local previous = db.criteriaFaction;
+	db.criteriaFaction = faction;
+	if previous == nil or previous == faction or db.criteriaBeforeFactionChange ~= nil or type(db.criteria) ~= "table" then
+		return;
+	end
+	db.criteriaBeforeFactionChange = {};
+	for criteriaID, record in pairs(db.criteria) do
+		local achievementID = ACHIEVEMENT_BY_CRITERIA[criteriaID];
+		local completed = achievementID and Private.IsSavedCompletionComplete(Private.GetSavedCompletions(achievementID)[achievementID]);
+		if Resolvers.GetCriteriaFaction(criteriaID) == faction and not completed then
+			db.criteriaBeforeFactionChange[criteriaID] = record;
+			db.criteria[criteriaID] = nil;
+		end
+	end
+end
+
 function Resolvers.IsAccountWideAchievement(achievementID)
 	if type(Private.IsAccountWideAchievement) == "function" then
 		return Private.IsAccountWideAchievement(achievementID) == true;
@@ -1473,6 +1525,7 @@ function Resolvers.CriteriaAssetUsesAccountProgress(criteriaType, assetID)
 end
 
 function Resolvers.GetSavedCriteriaProgress(criteriaOrID)
+	Resolvers.CheckFactionChange();
 	local criteriaID = type(criteriaOrID) == "table" and criteriaOrID.id or tonumber(criteriaOrID);
 	local useAccountProgress = Resolvers.CriteriaUsesAccountProgress(criteriaOrID);
 	local ownerDB = useAccountProgress and AchievementsDB or AchievementsCharacterDB;
@@ -1519,6 +1572,48 @@ end
 
 function Resolvers.ClearCriteriaAttempt(criteriaID)
 	Resolvers.GetSavedCriteriaAttempts()[criteriaID] = nil;
+	local battleState = AchievementsCharacterDB.battleState;
+	if type(battleState) == "table" and type(battleState.open) == "table" then
+		battleState.open[criteriaID] = nil;
+	end
+end
+
+function Resolvers.GetBattleState()
+	local battleState = AchievementsCharacterDB.battleState;
+	if type(battleState) ~= "table" then
+		battleState = {};
+		AchievementsCharacterDB.battleState = battleState;
+	end
+	if type(battleState.open) ~= "table" then
+		battleState.open = {};
+	end
+	return battleState;
+end
+
+function Resolvers.GetBattleStartedAt()
+	local elapsed;
+	if GetBattlefieldInstanceRunTime then
+		local runTime = GetBattlefieldInstanceRunTime();
+		if not Private.IsSecret(runTime) and type(runTime) == "number" and runTime > 0 then
+			elapsed = runTime / 1000;
+		end
+	end
+	if not elapsed and C_PvP and C_PvP.GetActiveMatchDuration then
+		local duration = C_PvP.GetActiveMatchDuration();
+		if not Private.IsSecret(duration) and type(duration) == "number" and duration > 0 then
+			elapsed = duration;
+		end
+	end
+	if not elapsed then
+		return nil;
+	end
+	return GetServerTime() - math.floor(elapsed + 0.5);
+end
+
+function Resolvers.IsSameBattle(battleState, mapID)
+	local savedStart = tonumber(battleState.startedAt);
+	local startedAt = Resolvers.GetBattleStartedAt();
+	return tonumber(battleState.mapID) == mapID and savedStart ~= nil and startedAt ~= nil and math.abs(startedAt - savedStart) <= 15;
 end
 
 function Resolvers.ResetCriteriaProgress(criteriaID)
@@ -1586,12 +1681,12 @@ function Resolvers.EventAssetMatches(requiredAsset, assetID)
 	return requiredAsset == 0 or requiredAsset == assetID;
 end
 
-function Resolvers.StartCriteriaAttempt(criteria)
+function Resolvers.StartCriteriaAttempt(criteria, keepProgress)
 	if not Resolvers.IsClientRecordableCriteria(criteria) then
 		return false;
 	end
 
-	if Resolvers.HasCriteriaFlag(criteria, CRITERIA_FLAGS.RESET_ON_START) then
+	if not keepProgress and Resolvers.HasCriteriaFlag(criteria, CRITERIA_FLAGS.RESET_ON_START) then
 		Resolvers.ResetCriteriaProgress(criteria.id);
 	end
 
@@ -1603,6 +1698,9 @@ function Resolvers.StartCriteriaAttempt(criteria)
 		startedAt = now,
 		expiresAt = expiresAt,
 	};
+	if criteria.startEvent == CRITERIA_START_EVENT.START_BATTLEGROUND then
+		Resolvers.GetBattleState().open[criteria.id] = true;
+	end
 
 	if expiresAt then
 		local criteriaID = criteria.id;
@@ -1677,6 +1775,27 @@ function Resolvers.ResetBattleScopedCriteria(mapID)
 		end
 	end
 	return reset;
+end
+
+function Resolvers.ResumeBattleScopedCriteria(mapID, openCriteria, leaveFailOnly)
+	local battleState = Resolvers.GetBattleState();
+	battleState.open = {};
+	local resumed = false;
+	for _, criteria in ipairs(Resolvers.GetCriteriaByStartEvent(CRITERIA_START_EVENT.START_BATTLEGROUND)) do
+		if Resolvers.EventAssetMatches(criteria.startAsset, mapID) then
+			local failsOnLeave = criteria.failEvent == CRITERIA_FAIL_EVENT.LEAVE_BATTLEGROUND;
+			local reopen = failsOnLeave;
+			if openCriteria then
+				reopen = openCriteria[criteria.id] == true and (failsOnLeave or not leaveFailOnly);
+			end
+			if reopen then
+				resumed = Resolvers.StartCriteriaAttempt(criteria, true) or resumed;
+			else
+				Resolvers.ClearCriteriaAttempt(criteria.id);
+			end
+		end
+	end
+	return resumed;
 end
 
 local function BuildResult(completed, quantity, requiredQuantity, characterName, source, eligible, statLabel)
@@ -2138,10 +2257,6 @@ local function ResolveAcquireItem(context)
 	return ResolveOwnedItemCount(context, "item-owned");
 end
 
-local function ResolveLootItem(context)
-	return ResolveOwnedItemCount(context, "item-looted-owned");
-end
-
 local function ResolveEquipItem(context)
 	local criteria = context.criteria;
 	local requiredQuantity = context.requiredQuantity or GetRequiredQuantity(context.criteriaTree);
@@ -2267,12 +2382,6 @@ function Resolvers.RecordEquippedItemSlot(slot)
 	return recorded;
 end
 
--- Type 30 WORLD_STATE_UI_VALUE_MODIFIED: criteria.asset is the world-state UI
--- id; criteria.value (or asset secondary) carries the threshold. Most rows are
--- ungated and live in Wintergrasp/instance content that does not exist on
--- Classic Era, so this helper degrades to a no-op when the underlying API is
--- absent. We iterate the active world-state UI table and dispatch each entry
--- as a discrete event with ctx.worldStateValue populated.
 function Resolvers.GetWorldStateScanMapID(ctx)
 	if type(ctx) == "table" and ctx.mapID then
 		return Resolvers.ResolveWorldStateMapID(ctx.mapID);
@@ -3189,15 +3298,9 @@ function Resolvers.RecordWorldStateScan()
 				local text, icon, tooltip;
 				state, text, icon, tooltip = Resolvers.NormalizeWorldStateUIInfo(state, third, fourth, fifth, sixth, seventh);
 				Resolvers.RecordKnownWorldStateText(text, mapID, expressions, values, icon, tooltip);
-				-- The world-state id is not exposed by the classic API; we fall back
-				-- to (i) as the asset key, which still allows criteria authored with
-				-- iteration-based assets to fire. Numeric value comes from `state`.
 				local value = tonumber(state) or tonumber(text);
 				if value then
 					values[i] = value;
-					if RecordCriteriaEvent then
-						RecordCriteriaEvent(CRITERIA_TYPE.WORLD_STATE_UI_VALUE_MODIFIED, i, { worldStateValue = value, mapID = mapID });
-					end
 				end
 			end
 		end
@@ -3211,18 +3314,18 @@ local recentUsedItems = {};
 local itemUseRefreshPending = false;
 
 local function GetItemUseCriteriaItems()
-	if itemUseCriteriaItems then
-		return itemUseCriteriaItems;
+	if Resolvers.itemUseCriteriaItems then
+		return Resolvers.itemUseCriteriaItems;
 	end
 
-	itemUseCriteriaItems = {};
+	local items = {};
 	for _, criteria in pairs(CRITERIA_DATA) do
 		if Resolvers.IsClientRecordableCriteria(criteria) and criteria.type == CRITERIA_TYPE.USE_ITEM and criteria.asset and criteria.asset ~= 0 then
-			itemUseCriteriaItems[criteria.asset] = true;
+			items[criteria.asset] = true;
 		end
 	end
-
-	return itemUseCriteriaItems;
+	Resolvers.itemUseCriteriaItems = items;
+	return items;
 end
 
 local function ExtractItemIDFromLink(itemLink)
@@ -3471,13 +3574,18 @@ local recentBattlegroundWinMapID = nil;
 
 local function RecordBattlegroundWin()
 	local _, instanceType, _, _, _, _, _, instanceMapID = GetInstanceInfo();
-	instanceMapID = tonumber(instanceMapID);
-	if instanceType ~= "pvp" or not instanceMapID or instanceMapID == 0 then
+	instanceMapID = not Private.IsSecret(instanceMapID) and tonumber(instanceMapID) or nil;
+	if instanceType ~= "pvp" or not instanceMapID or instanceMapID == 0 or lastBattlegroundMapID ~= instanceMapID then
 		return false;
 	end
 
+	local battleState = Resolvers.GetBattleState();
+	if tonumber(battleState.mapID) == instanceMapID and not battleState.startedAt then
+		battleState.startedAt = Resolvers.GetBattleStartedAt();
+	end
+
 	local winner = GetBattlefieldWinner();
-	if winner == nil then
+	if Private.IsSecret(winner) or winner == nil then
 		return false;
 	end
 
@@ -3498,6 +3606,11 @@ local function RecordBattlegroundWin()
 		return false;
 	end
 	recentBattlegroundWinMapID = instanceMapID;
+	local countedAt = tonumber(battleState.winAt);
+	if tonumber(battleState.winMapID) == instanceMapID and (not countedAt or GetServerTime() - countedAt <= 600) then
+		return false;
+	end
+	battleState.winMapID, battleState.winAt = instanceMapID, GetServerTime();
 
 	Resolvers.IncrementCriteriaAssetProgress(CRITERIA_TYPE.WIN_BATTLEGROUND, instanceMapID, 1, nil, GetProgressCharacterName());
 	RecordCriteriaEvent(CRITERIA_TYPE.WIN_BATTLEGROUND, instanceMapID, {
@@ -3588,6 +3701,9 @@ local function RecordDuelOutcomeFromSystemMessage(message)
 		end
 		name = name:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "");
 		name = name:match("^%s*(.-)%s*$");
+		if Achievements.IS_FOREVER then
+			return Private.NormaliseForeverName(name);
+		end
 		name = Ambiguate(name, "none");
 		name = name:match("^([^%-]+)") or name;
 		return name;
@@ -3611,7 +3727,12 @@ local function RecordDuelOutcomeFromSystemMessage(message)
 			end
 
 			local criteriaType;
-			if winner == playerName then
+			if Achievements.IS_FOREVER then
+				-- Your full name first; your bare first name only when neither printed name has a surname.
+				local bare = not tostring(winner):find(" ", 1, true) and not tostring(loser):find(" ", 1, true);
+				criteriaType = (Private.IsSelfName(winner) and CRITERIA_TYPE.WIN_DUEL) or (Private.IsSelfName(loser) and CRITERIA_TYPE.LOSE_DUEL)
+					or (bare and Private.IsSelfName(winner, true) and CRITERIA_TYPE.WIN_DUEL) or (bare and Private.IsSelfName(loser, true) and CRITERIA_TYPE.LOSE_DUEL) or nil;
+			elseif winner == playerName then
 				criteriaType = CRITERIA_TYPE.WIN_DUEL;
 			elseif loser == playerName then
 				criteriaType = CRITERIA_TYPE.LOSE_DUEL;
@@ -3631,8 +3752,11 @@ local function RecordDuelOutcomeFromSystemMessage(message)
 	return false;
 end
 
-local function RecordBattlegroundParticipation(isReloadingUi)
+local function RecordBattlegroundParticipation(isReloadingUi, isInitialLogin)
 	local _, instanceType, _, _, _, _, _, instanceMapID = GetInstanceInfo();
+	if Private.IsSecret(instanceMapID) then
+		return false;
+	end
 	instanceMapID = tonumber(instanceMapID);
 
 	if instanceType ~= "pvp" or not instanceMapID or instanceMapID == 0 then
@@ -3641,23 +3765,47 @@ local function RecordBattlegroundParticipation(isReloadingUi)
 		end
 		lastBattlegroundMapID = nil;
 		recentBattlegroundWinMapID = nil;
+		AchievementsCharacterDB.battleState = nil;
 		return false;
 	end
 
-	-- A reload stays in the same battle; any other loading screen starts a new one, even on the same map.
-	if isReloadingUi and not lastBattlegroundMapID then
+	-- A reload, a reconnect or a same-map loading screen stays in the same battle: failed attempts stay closed.
+	local battleState = Resolvers.GetBattleState();
+	if not lastBattlegroundMapID and (isReloadingUi or isInitialLogin) then
+		local sameBattle = isReloadingUi and tonumber(battleState.mapID) == instanceMapID or Resolvers.IsSameBattle(battleState, instanceMapID);
+		if not sameBattle then
+			if not isReloadingUi then
+				Resolvers.ResetBattleScopedCriteria(instanceMapID);
+			end
+			battleState.mapID, battleState.startedAt = instanceMapID, Resolvers.GetBattleStartedAt();
+			battleState.objectives, battleState.objectivesFrom = nil, nil;
+		end
+		local dead = UnitIsDeadOrGhost("player");
+		Resolvers.ResumeBattleScopedCriteria(instanceMapID, sameBattle and battleState.open or nil, not isReloadingUi or Private.IsSecret(dead) or dead == true);
 		lastBattlegroundMapID = instanceMapID;
-		Resolvers.RecordCriteriaStart(CRITERIA_START_EVENT.START_BATTLEGROUND, instanceMapID);
+		local winner = GetBattlefieldWinner();
+		if not Private.IsSecret(winner) and winner ~= nil then
+			recentBattlegroundWinMapID = instanceMapID;
+		end
 		return false;
 	end
-	if lastBattlegroundMapID and lastBattlegroundMapID ~= instanceMapID then
+	if lastBattlegroundMapID == instanceMapID then
+		if not Resolvers.IsSameBattle(battleState, instanceMapID) then
+			Resolvers.ResetBattleScopedCriteria(instanceMapID);
+			Resolvers.ResumeBattleScopedCriteria(instanceMapID, nil, true);
+			battleState.startedAt = Resolvers.GetBattleStartedAt();
+			battleState.objectives, battleState.objectivesFrom = nil, nil;
+		end
+		return false;
+	end
+	if lastBattlegroundMapID then
 		Resolvers.RecordCriteriaFail(CRITERIA_FAIL_EVENT.LEAVE_BATTLEGROUND, lastBattlegroundMapID);
 	end
+	recentBattlegroundWinMapID = nil;
+	-- Straight from another battleground the scoreboard can still show that battle: the first read is the baseline.
+	AchievementsCharacterDB.battleState = { mapID = instanceMapID, startedAt = Resolvers.GetBattleStartedAt(), open = {}, objectives = not lastBattlegroundMapID and {} or false, objectivesFrom = GetServerTime() };
 	Resolvers.ResetBattleScopedCriteria(instanceMapID);
 	Resolvers.RecordCriteriaStart(CRITERIA_START_EVENT.START_BATTLEGROUND, instanceMapID);
-	if lastBattlegroundMapID == instanceMapID then
-		return false;
-	end
 	lastBattlegroundMapID = instanceMapID;
 
 	Resolvers.IncrementCriteriaAssetProgress(CRITERIA_TYPE.PARTICIPATE_IN_BATTLEGROUND, instanceMapID, 1, nil, GetProgressCharacterName());
@@ -3667,6 +3815,145 @@ local function RecordBattlegroundParticipation(isReloadingUi)
 		sourceRaceID = GetPlayerRaceID(),
 	}, "participate-bg-" .. tostring(instanceMapID));
 	ScheduleItemUseCriteriaRefresh();
+	return true;
+end
+
+-- Type 30 assets are scoreboard columns (WorldStateUI type 2): { asset, icon name, enUS column name }.
+Resolvers.battlefieldObjectiveColumns = {
+	[489] = { { 42, "flagcapture", "flag captures" }, { 44, "flagreturn", "flag returns" } },
+	[529] = { { 122, "towercapture", "bases assaulted" }, { 123, "towerdefend", "bases defended" } },
+	[30] = { { 63, "graveyardcapture", "graveyards assaulted" }, { 65, "graveyarddefend", "graveyards defended" }, { 61, "towercapture", "towers assaulted" }, { 64, "towerdefend", "towers defended" } },
+	[566] = { { 183, "flagcapture", "flag captures" } },
+};
+
+-- A column counts only when every source that names one names the same.
+function Resolvers.GetBattlefieldObjectiveAsset(mapID, statID, icon, text)
+	local columns = Resolvers.battlefieldObjectiveColumns[mapID];
+	if not columns or Private.IsSecret(statID) or Private.IsSecret(icon) or Private.IsSecret(text) then
+		return nil;
+	end
+	local iconKey = type(icon) == "string" and string.lower(icon):gsub("[^%w]", "") or "";
+	local name = type(text) == "string" and Resolvers.IsEnglishClientLocale() and string.lower(text) or nil;
+	local asset;
+	for _, column in ipairs(columns) do
+		if statID == column[1] or (iconKey ~= "" and string.find(iconKey, column[2], 1, true)) or name == column[3] then
+			if asset then
+				return nil;
+			end
+			asset = column[1];
+		end
+	end
+	return asset;
+end
+
+function Resolvers.ReadBattlefieldObjectives(mapID)
+	local values = {};
+	if Achievements.IS_FOREVER then
+		local pvp = rawget(_G, "C_PvP");
+		local guid = UnitGUID("player");
+		if type(pvp) ~= "table" or type(pvp.GetScoreInfoByPlayerGuid) ~= "function" or Private.IsSecret(guid) or type(guid) ~= "string" then
+			return nil;
+		end
+		local info = pvp.GetScoreInfoByPlayerGuid(guid);
+		if Private.IsSecret(info) or type(info) ~= "table" or Private.IsSecret(info.stats) or type(info.stats) ~= "table" then
+			return nil;
+		end
+		for _, stat in ipairs(info.stats) do
+			local asset = type(stat) == "table" and Resolvers.GetBattlefieldObjectiveAsset(mapID, stat.pvpStatID, stat.iconName, stat.name);
+			if asset then
+				local value = stat.pvpStatValue;
+				values[asset] = values[asset] == nil and (not Private.IsSecret(value) and type(value) == "number" and value or true) or false;
+			end
+		end
+		return Resolvers.DropSharedObjectiveAssets(values);
+	end
+	local playerName, realm = UnitName("player"), GetNormalizedRealmName and GetNormalizedRealmName();
+	local fullName = type(realm) == "string" and realm ~= "" and playerName and (playerName .. "-" .. realm) or nil;
+	local row;
+	for i = 1, GetNumBattlefieldScores() do
+		local name = GetBattlefieldScore(i);
+		if name and (name == playerName or name == fullName) then
+			row = i;
+			break;
+		end
+	end
+	if not row then
+		return nil;
+	end
+	for column = 1, GetNumBattlefieldStats() do
+		local text, icon = GetBattlefieldStatInfo(column);
+		local asset = Resolvers.GetBattlefieldObjectiveAsset(mapID, nil, icon, text);
+		if asset then
+			local value = GetBattlefieldStatData(row, column);
+			values[asset] = values[asset] == nil and (type(value) == "number" and value or true) or false;
+		end
+	end
+	return Resolvers.DropSharedObjectiveAssets(values);
+end
+
+-- Two columns naming the same asset, readable or not: neither counts.
+function Resolvers.DropSharedObjectiveAssets(values)
+	for asset, value in pairs(values) do
+		if type(value) ~= "number" then
+			values[asset] = nil;
+		end
+	end
+	return next(values) and values or nil;
+end
+
+-- Scoreboard columns are per-battle totals: count only the rise since the saved last value.
+function Resolvers.RecordBattlefieldObjectives()
+	local _, instanceType, _, _, _, _, _, instanceMapID = GetInstanceInfo();
+	if Private.IsSecret(instanceMapID) then
+		return false;
+	end
+	instanceMapID = tonumber(instanceMapID);
+	local battleState = AchievementsCharacterDB and AchievementsCharacterDB.battleState;
+	if instanceType ~= "pvp" or not instanceMapID or instanceMapID ~= lastBattlegroundMapID or type(battleState) ~= "table" or tonumber(battleState.mapID) ~= instanceMapID then
+		return false;
+	end
+	local ok, values = pcall(Resolvers.ReadBattlefieldObjectives, instanceMapID);
+	if not ok or type(values) ~= "table" then
+		return false;
+	end
+	local seen, from = battleState.objectives, tonumber(battleState.objectivesFrom);
+	battleState.objectivesFrom = nil;
+	-- Unknown start, or read within 10 s of entering: what it shows is from before.
+	if type(seen) ~= "table" or (from and GetServerTime() - from <= 10) then
+		battleState.objectives = values;
+		return false;
+	end
+	local recorded = false;
+	for asset, value in pairs(values) do
+		local last = tonumber(seen[asset]) or 0;
+		if value > last then
+			seen[asset] = value;
+			recorded = RecordCriteriaEvent(CRITERIA_TYPE.WORLD_STATE_UI_VALUE_MODIFIED, asset, { mapID = instanceMapID, zoneAreaID = instanceMapID, sourceRaceID = GetPlayerRaceID() }, nil, value - last) or recorded;
+		end
+	end
+	return recorded;
+end
+
+-- After the match ends the scoreboard is this battle's: a direct transfer with no read yet counts from 0.
+function Resolvers.NoteBattlefieldMatchComplete()
+	local battleState = AchievementsCharacterDB and AchievementsCharacterDB.battleState;
+	if type(battleState) == "table" and battleState.objectives == false then
+		battleState.objectives, battleState.objectivesFrom = {}, nil;
+	end
+end
+
+function Resolvers.RequestBattlefieldObjectiveScore()
+	Private.state = Private.state or {};
+	local request = rawget(_G, "RequestBattlefieldScoreData");
+	local _, instanceType, _, _, _, _, _, instanceMapID = GetInstanceInfo();
+	if Private.state.objectiveScoreRequestPending or type(request) ~= "function" or instanceType ~= "pvp" or Private.IsSecret(instanceMapID) or not Resolvers.battlefieldObjectiveColumns[tonumber(instanceMapID) or 0] then
+		return false;
+	end
+	Private.state.objectiveScoreRequestPending = true;
+	C_Timer.After(1, function()
+		Private.state.objectiveScoreRequestPending = nil;
+		pcall(request);
+	end);
 	return true;
 end
 
@@ -3702,14 +3989,52 @@ function Resolvers.GetActiveArenaContext()
 	};
 end
 
+-- Name, deaths and team (0/1) of a scoreboard row; Forever has only C_PvP.GetScoreInfo.
+function Resolvers.GetBattlefieldScoreRow(index)
+	if not Achievements.IS_FOREVER then
+		local name, _, _, deaths, _, faction = GetBattlefieldScore(index);
+		return name, deaths, faction;
+	end
+	local pvp = rawget(_G, "C_PvP");
+	local info = type(pvp) == "table" and type(pvp.GetScoreInfo) == "function" and pvp.GetScoreInfo(index);
+	if Private.IsSecret(info) or type(info) ~= "table" then
+		return nil;
+	end
+	local deaths = info.deaths;
+	if Private.IsSecret(deaths) then
+		deaths = nil;
+	end
+	return info.name, deaths, info.faction;
+end
+
+-- Forever: your full name first; your bare first name only when no score name has a surname.
+function Resolvers.GetOwnBattlefieldScoreIndex()
+	local bareIndex, surnamed;
+	for i = 1, GetNumBattlefieldScores() do
+		local name = Private.NormaliseForeverName((Resolvers.GetBattlefieldScoreRow(i)));
+		if name then
+			if Private.IsSelfName(name) then
+				return i;
+			end
+			surnamed = surnamed or name:find(" ", 1, true) ~= nil;
+			bareIndex = bareIndex or (Private.IsSelfName(name, true) and i) or nil;
+		end
+	end
+	return not surnamed and bareIndex or nil;
+end
+
 function Resolvers.GetPlayerBattlefieldFaction()
+	if Achievements.IS_FOREVER then
+		local index = Resolvers.GetOwnBattlefieldScoreIndex();
+		return index and tonumber((select(3, Resolvers.GetBattlefieldScoreRow(index)))) or nil;
+	end
 	local playerName = UnitName("player");
 	if not playerName or playerName == "" then
 		return nil;
 	end
 
 	for i = 1, GetNumBattlefieldScores() do
-		local name, _, _, _, _, _, faction = GetBattlefieldScore(i);
+		local name, _, faction = Resolvers.GetBattlefieldScoreRow(i);
 		if type(name) == "string" then
 			local shortName = string.match(name, "^[^-]+") or name;
 			if shortName == playerName then
@@ -3726,24 +4051,30 @@ function Resolvers.PlayerIsOnlyLivingArenaScore()
 		return false;
 	end
 
+	local ownIndex = Achievements.IS_FOREVER and Resolvers.GetOwnBattlefieldScoreIndex();
 	local aliveCount = 0;
 	local playerAlive = false;
 	local sawPlayer = false;
 	for i = 1, GetNumBattlefieldScores() do
-		local name, _, _, deaths = GetBattlefieldScore(i);
+		local name, deaths = Resolvers.GetBattlefieldScoreRow(i);
 		if type(name) == "string" and name ~= "" then
-			local shortName = string.match(name, "^[^-]+") or name;
+			local isPlayer;
+			if Achievements.IS_FOREVER then
+				isPlayer = i == ownIndex;
+			else
+				isPlayer = (string.match(name, "^[^-]+") or name) == playerName;
+			end
 			local deathCount = tonumber(deaths);
 			if deathCount == nil then
 				return false;
 			end
 			if deathCount == 0 then
 				aliveCount = aliveCount + 1;
-				if shortName == playerName then
+				if isPlayer then
 					playerAlive = true;
 				end
 			end
-			if shortName == playerName then
+			if isPlayer then
 				sawPlayer = true;
 			end
 		end
@@ -4417,11 +4748,11 @@ function Resolvers.HookGlobalFunction(functionName, callback)
 end
 
 local function HookItemUseCriteria()
-	if itemUseHooksInstalled then
-		return itemUseHooksInstalled;
+	if Resolvers.itemUseHooksInstalled then
+		return true;
 	end
 
-	itemUseHooksInstalled = true;
+	Resolvers.itemUseHooksInstalled = true;
 	Resolvers.HookTableFunction(C_Container, "UseContainerItem", function(bagID, slotID)
 		Resolvers.RecordVendorItemSale(bagID, slotID);
 		RecordUsedItemID(GetContainerItemIDCompat(bagID, slotID));
@@ -4751,51 +5082,81 @@ function Resolvers.GetGameObjectIDFromGUID(guid)
 end
 
 function Resolvers.RecordPlayerSpellcast(unit, _, spellID)
-	if Private.IsSecret(unit) or Private.IsSecret(spellID) or (unit and unit ~= "player") then
+	if Private.IsSecret(unit) or Private.IsSecret(spellID) or (unit and unit ~= "player") or tonumber(spellID) ~= 13262 then
 		return false;
 	end
-	spellID = tonumber(spellID) or 0;
-	if spellID == 0 then
-		return false;
-	end
-
 	Private.state = Private.state or {};
-	local now = Resolvers.GetNow();
-	if spellID == 7620 or spellID == 7731 or spellID == 7732 or spellID == 18248 or spellID == 33095 or spellID == 51294 then
-		Private.state.lastFishingCastAt = now;
-		return true;
-	elseif spellID == 13262 then
-		Private.state.lastDisenchantCastAt = now;
-		return true;
-	end
-	return false;
+	Private.state.lastDisenchantCastAt = Resolvers.GetNow();
+	return true;
 end
 
-function Resolvers.RecentCriteriaCast(kind, window)
-	Private.state = Private.state or {};
-	local key = kind == "disenchant" and "lastDisenchantCastAt" or "lastFishingCastAt";
-	local lastCastAt = Private.state[key];
-	return lastCastAt and (Resolvers.GetNow() - lastCastAt) <= (window or 20);
+function Resolvers.BuildLootItemContext(itemLink)
+	local itemID = ExtractItemIDFromLink(itemLink);
+	local itemRecord = itemID and ITEM_DATA[itemID] or nil;
+	local _, _, itemQuality, itemLevel = API.GetItemInfo(itemLink);
+	return {
+		itemLink = itemLink,
+		itemID = itemID,
+		itemClass = itemRecord and itemRecord.class,
+		itemSubclass = itemRecord and itemRecord.subclass,
+		itemQuality = itemQuality or (itemRecord and itemRecord.quality),
+		itemLevel = itemLevel,
+	};
 end
 
--- Record a GET_LOOT_BY_ACQUISITION criterion (fish caught / disenchant) exactly
--- once per cast. The same catch fires both LOOT_OPENED and CHAT_MSG_LOOT and may
--- contain multiple items; without this guard the saved counter would be inflated
--- by the number of items times the number of events, which is what caused fish
--- counts to run far ahead of reality.
-function Resolvers.RecordLootByAcquisitionOnce(kind, assetID, lootContexts)
+-- One loot window is one catch or disenchant; LOOT_READY and LOOT_OPENED both fire for it, LOOT_CLOSED ends it.
+function Resolvers.RecordLootWindowCriteria(event)
 	Private.state = Private.state or {};
-	local castKey = kind == "disenchant" and "lastDisenchantCastAt" or "lastFishingCastAt";
-	local castAt = Private.state[castKey];
-	local recordedKey = kind == "disenchant" and "lastDisenchantAcquisitionAt" or "lastFishingAcquisitionAt";
-	if castAt and Private.state[recordedKey] == castAt then
-		-- This catch was already counted (other event or extra item line).
+	local state = Private.state;
+	if event == "LOOT_CLOSED" then
+		state.lootWindowCounted = nil;
 		return false;
 	end
-	Private.state[recordedKey] = castAt;
+	local numSlots = GetNumLootItems();
+	numSlots = not Private.IsSecret(numSlots) and tonumber(numSlots) or 0;
+	if state.lootWindowCounted or numSlots <= 0 then
+		return false;
+	end
+	local isFishing = IsFishingLoot and IsFishingLoot();
+	local fishing = not Private.IsSecret(isFishing) and (isFishing == true or isFishing == 1);
+	if not fishing and event ~= "LOOT_OPENED" then
+		return false;
+	end
+	state.lootWindowCounted = true;
+	state.lootWindowSerial = (state.lootWindowSerial or 0) + 1;
 
-	local ctx = (lootContexts and lootContexts[1]) or {};
-	return Resolvers.RecordCriteriaProgress(CRITERIA_TYPE.GET_LOOT_BY_ACQUISITION, assetID, 1, ctx, "loot-" .. kind .. "-" .. tostring(castAt or "0"));
+	local recorded = false;
+	local lootContexts = {};
+	local seenObjectIDs = {};
+	for slot = 1, numSlots do
+		local itemLink = GetLootSlotLink(slot);
+		if not Private.IsSecret(itemLink) and type(itemLink) == "string" then
+			lootContexts[#lootContexts + 1] = Resolvers.BuildLootItemContext(itemLink);
+		end
+		local objectID = Resolvers.GetGameObjectIDFromGUID((GetLootSourceInfo(slot)));
+		if objectID and not seenObjectIDs[objectID] then
+			seenObjectIDs[objectID] = true;
+			recorded = Resolvers.RecordCriteriaProgress(CRITERIA_TYPE.USE_GAME_OBJECT, objectID, 1, { objectID = objectID }, "loot-object-" .. tostring(objectID)) or recorded;
+			if fishing then
+				recorded = Resolvers.RecordCriteriaProgress(CRITERIA_TYPE.CATCH_FISH_IN_POOL, objectID, 1, { objectID = objectID }, "fish-pool-" .. tostring(objectID)) or recorded;
+			end
+		end
+	end
+
+	local disenchantAt = state.lastDisenchantCastAt;
+	if fishing then
+		recorded = Resolvers.RecordCriteriaProgress(CRITERIA_TYPE.GET_LOOT_BY_ACQUISITION, 3, 1, lootContexts[1] or {}, "loot-fishing-" .. tostring(state.lootWindowSerial)) or recorded;
+	elseif disenchantAt and disenchantAt ~= state.lastDisenchantAcquisitionAt and Resolvers.GetNow() - disenchantAt <= 10 then
+		state.lastDisenchantAcquisitionAt = disenchantAt;
+		recorded = Resolvers.RecordCriteriaProgress(CRITERIA_TYPE.GET_LOOT_BY_ACQUISITION, 4, 1, lootContexts[1] or {}, "loot-disenchant-" .. tostring(disenchantAt)) or recorded;
+	end
+
+	if recorded and Achievements.ScheduleCriteriaRefresh then
+		Achievements.ScheduleCriteriaRefresh(true, 0.25, "loot");
+	elseif recorded and Achievements.RefreshCriteriaAchievements then
+		Achievements.RefreshCriteriaAchievements(true);
+	end
+	return recorded;
 end
 
 function Resolvers.BuildChatFormatPattern(formatText, rolesByArgument)
@@ -4918,6 +5279,10 @@ function Resolvers.IsPlayerNameOrSelf(name)
 			return true;
 		end
 	end
+	if Achievements.IS_FOREVER then
+		-- Your full name, or your bare first name when the printed name has no surname.
+		return Private.IsSelfName(name, true);
+	end
 	local playerName = UnitName("player");
 	local shortName = string.match(name, "^[^-]+") or name;
 	return name == playerName or shortName == playerName;
@@ -4970,59 +5335,177 @@ function Resolvers.RecordLootRollCriteria(message)
 	return recorded;
 end
 
-function Resolvers.RecordLootAcquisitionCriteria(message)
-	local recorded = false;
-	recorded = Resolvers.RecordLootRollCriteria(message) or recorded;
-	local lootContexts = {};
-	if type(message) == "string" then
-		for itemLink in string.gmatch(message, "|Hitem:[^|]+|h%[[^%]]+%]|h") do
-			local itemID = ExtractItemIDFromLink(itemLink);
-			local itemRecord = itemID and ITEM_DATA[itemID] or nil;
-			local itemQuality, itemLevel;
-			local _, _, quality, level = API.GetItemInfo(itemLink);
-			itemQuality = quality;
-			itemLevel = level;
-			local ctx = {
-				itemLink = itemLink,
-				itemID = itemID,
-				itemClass = itemRecord and itemRecord.class,
-				itemSubclass = itemRecord and itemRecord.subclass,
-				itemQuality = itemQuality or (itemRecord and itemRecord.quality),
-				itemLevel = itemLevel,
-			};
-			lootContexts[#lootContexts + 1] = ctx;
-			recorded = Resolvers.RecordCriteriaProgress(CRITERIA_TYPE.ACQUIRE_ITEM, 0, 1, ctx, "acquire-item-any-" .. itemLink) or recorded;
-			recorded = Resolvers.RecordCriteriaProgress(CRITERIA_TYPE.LOOT_ITEM, 0, 1, ctx, "loot-item-any-" .. itemLink) or recorded;
-			recorded = Resolvers.RecordCriteriaProgress(CRITERIA_TYPE.LOOT_ANY_ITEM, 0, 1, ctx, "loot-any-item-" .. itemLink) or recorded;
-			recorded = Resolvers.RecordCriteriaProgress(CRITERIA_TYPE.OBTAIN_ANY_ITEM, 0, 1, ctx, "obtain-any-item-" .. itemLink) or recorded;
+function Resolvers.GetSelfLootPatterns()
+	if Resolvers.selfLootPatterns then
+		return Resolvers.selfLootPatterns;
+	end
+
+	local patterns = {};
+	for _, info in ipairs({
+		{ "LOOT_ITEM_SELF_MULTIPLE", true },
+		{ "LOOT_ITEM_SELF", true },
+		{ "LOOT_ITEM_BONUS_ROLL_SELF_MULTIPLE", true },
+		{ "LOOT_ITEM_BONUS_ROLL_SELF", true },
+		{ "LOOT_ITEM_PUSHED_SELF_MULTIPLE", false },
+		{ "LOOT_ITEM_PUSHED_SELF", false },
+		{ "LOOT_ITEM_CREATED_SELF_MULTIPLE", false },
+		{ "LOOT_ITEM_CREATED_SELF", false },
+	}) do
+		local pattern, captureRoles = Resolvers.BuildChatFormatPattern(_G[info[1]], { [1] = "item", [2] = "count" });
+		if pattern then
+			patterns[#patterns + 1] = { pattern = pattern, captureRoles = captureRoles, looted = info[2] };
 		end
 	end
+	Resolvers.selfLootPatterns = patterns;
+	return patterns;
+end
 
-	-- "Loot by acquisition" criteria (fish caught / items disenchanted) must
-	-- count once per catch, not once per looted item. A single fishing catch
-	-- can yield several items and also fires BOTH LOOT_OPENED and CHAT_MSG_LOOT
-	-- for the same cast, so we dedupe on the cast timestamp to avoid inflating
-	-- the counter by 2-4x.
-	if Resolvers.RecentCriteriaCast("fishing", 30) then
-		recorded = Resolvers.RecordLootByAcquisitionOnce("fishing", 3, lootContexts) or recorded;
-	elseif Resolvers.RecentCriteriaCast("disenchant", 10) then
-		recorded = Resolvers.RecordLootByAcquisitionOnce("disenchant", 4, lootContexts) or recorded;
+-- Item text of the player's own loot, receive or create line, whether it was looted, and the stack count.
+function Resolvers.ParseSelfLootMessage(message)
+	if Private.IsSecret(message) or type(message) ~= "string" or message == "" then
+		return nil;
 	end
+	for _, info in ipairs(Resolvers.GetSelfLootPatterns()) do
+		local captures = Resolvers.ReadPatternCaptures(info.captureRoles, string.match(message, info.pattern));
+		if captures.item then
+			return captures.item, info.looted, tonumber(captures.count);
+		end
+	end
+	return nil;
+end
 
-	-- A single looted object (e.g. a fishing pool) can expose several loot
-	-- slots; count each distinct source object only once per loot window so the
-	-- "use object" / "catch fish in pool" counters track catches, not items.
-	local seenObjectIDs = {};
-	local fishingActive = Resolvers.RecentCriteriaCast("fishing", 30);
-	for slot = 1, GetNumLootItems() do
-		local sourceGUID = GetLootSourceInfo(slot);
-		local objectID = Resolvers.GetGameObjectIDFromGUID(sourceGUID);
-		if objectID and not seenObjectIDs[objectID] then
-			seenObjectIDs[objectID] = true;
-			recorded = Resolvers.RecordCriteriaProgress(CRITERIA_TYPE.USE_GAME_OBJECT, objectID, 1, { objectID = objectID }, "loot-object-" .. tostring(objectID)) or recorded;
-			if fishingActive then
-				recorded = Resolvers.RecordCriteriaProgress(CRITERIA_TYPE.CATCH_FISH_IN_POOL, objectID, 1, { objectID = objectID }, "fish-pool-" .. tostring(objectID)) or recorded;
+function Resolvers.GetLootItemCriteriaItems()
+	if not Resolvers.lootItemCriteriaItems then
+		local itemIDs = {};
+		for _, criteria in pairs(CRITERIA_DATA) do
+			if criteria.type == CRITERIA_TYPE.LOOT_ITEM and (tonumber(criteria.asset) or 0) ~= 0 then
+				itemIDs[criteria.asset] = true;
 			end
+		end
+		Resolvers.lootItemCriteriaItems = itemIDs;
+	end
+	return Resolvers.lootItemCriteriaItems;
+end
+
+-- Specific-item LOOT_ITEM criteria read this per-item record: your own loot lines plus the one-time backfills.
+function Resolvers.RecordLootedItem(itemID, count)
+	if not itemID or not Resolvers.GetLootItemCriteriaItems()[itemID] then
+		return false;
+	end
+	return Resolvers.IncrementCriteriaAssetProgress(CRITERIA_TYPE.LOOT_ITEM, itemID, math.max(1, count or 1), nil, GetProgressCharacterName());
+end
+
+function Resolvers.TopUpLootedItems(countOwned)
+	for itemID in pairs(Resolvers.GetLootItemCriteriaItems()) do
+		local owned = countOwned(itemID);
+		local progress = Resolvers.GetSavedCriteriaAssetProgress(CRITERIA_TYPE.LOOT_ITEM, itemID)[CRITERIA_TYPE.LOOT_ITEM];
+		local saved = progress and progress[itemID] and tonumber(progress[itemID].quantity) or 0;
+		if not Private.IsSecret(owned) and type(owned) == "number" and owned > saved then
+			Resolvers.IncrementCriteriaAssetProgress(CRITERIA_TYPE.LOOT_ITEM, itemID, owned - saved, nil, GetProgressCharacterName());
+		end
+	end
+end
+
+function Resolvers.GetEquippedBagInfo(bagID)
+	local inventorySlot = C_Container.ContainerIDToInventoryID and C_Container.ContainerIDToInventoryID(bagID);
+	return inventorySlot and GetInventoryItemID("player", inventorySlot), C_Container.GetContainerNumSlots(bagID);
+end
+
+-- Right after login the bags can read as empty; an equipped bag reports its slots once its contents are known.
+function Resolvers.BagContentsLoaded()
+	local backpackSlots = C_Container.GetContainerNumSlots(0);
+	if Private.IsSecret(backpackSlots) or (tonumber(backpackSlots) or 0) <= 0 then
+		return false;
+	end
+	for bagID = 1, NUM_BAG_SLOTS or 4 do
+		local bagItemID, bagSlots = Resolvers.GetEquippedBagInfo(bagID);
+		if Private.IsSecret(bagItemID) or Private.IsSecret(bagSlots) or (bagItemID and (tonumber(bagSlots) or 0) <= 0) then
+			return false;
+		end
+	end
+	return true;
+end
+
+-- A bag slot that read empty at the first scan and holds a loaded bag within 10 s of it gets one more top-up.
+function Resolvers.TopUpLateBags()
+	local late = Resolvers.lootItemLateBags;
+	if not late or Resolvers.GetNow() - late.at > 10 then
+		Resolvers.lootItemLateBags = nil;
+		return false;
+	end
+	local appeared = {};
+	for bagID in pairs(late.bags) do
+		local bagItemID, bagSlots = Resolvers.GetEquippedBagInfo(bagID);
+		if not Private.IsSecret(bagItemID) and bagItemID and not Private.IsSecret(bagSlots) and (tonumber(bagSlots) or 0) > 0 then
+			appeared[#appeared + 1] = bagID;
+		end
+	end
+	if #appeared == 0 or not Resolvers.BagContentsLoaded() then
+		return false;
+	end
+	for _, bagID in ipairs(appeared) do
+		late.bags[bagID] = nil;
+	end
+	Resolvers.TopUpLootedItems(GetOwnedItemCount);
+	return true;
+end
+
+-- Once per character, after BAG_UPDATE_DELAYED or a UI reload: copies owned then (bags, bank, equipped) count as looted.
+function Resolvers.BackfillLootedItems(bagsLoaded)
+	if bagsLoaded then
+		Resolvers.lootItemBagsLoaded = true;
+	end
+	if AchievementsCharacterDB.lootItemBackfill then
+		return Resolvers.TopUpLateBags();
+	end
+	if not Resolvers.lootItemBagsLoaded or not Resolvers.BagContentsLoaded() then
+		return false;
+	end
+	Resolvers.TopUpLootedItems(GetOwnedItemCount);
+	AchievementsCharacterDB.lootItemBackfill = true;
+	local emptyBags = {};
+	for bagID = 1, NUM_BAG_SLOTS or 4 do
+		local bagItemID = Resolvers.GetEquippedBagInfo(bagID);
+		if not Private.IsSecret(bagItemID) and not bagItemID then
+			emptyBags[bagID] = true;
+		end
+	end
+	Resolvers.lootItemLateBags = next(emptyBags) and { at = Resolvers.GetNow(), bags = emptyBags } or nil;
+	return true;
+end
+
+-- Once per character, on the first bank visit, in case the bank could not be read at the first backfill.
+function Resolvers.BackfillBankLootedItems()
+	if AchievementsCharacterDB.lootItemBankBackfill or not (C_Item and C_Item.GetItemCount) then
+		return false;
+	end
+	Resolvers.TopUpLootedItems(function(itemID)
+		local withBank, withoutBank = C_Item.GetItemCount(itemID, true), C_Item.GetItemCount(itemID);
+		if Private.IsSecret(withBank) or Private.IsSecret(withoutBank) then
+			return nil;
+		end
+		return (tonumber(withBank) or 0) - (tonumber(withoutBank) or 0);
+	end);
+	AchievementsCharacterDB.lootItemBankBackfill = true;
+	return true;
+end
+
+function Resolvers.RecordLootAcquisitionCriteria(message)
+	if Private.IsSecret(message) then
+		return false;
+	end
+	local recorded = Resolvers.RecordLootRollCriteria(message);
+	local itemText, looted, count = Resolvers.ParseSelfLootMessage(message);
+	if itemText then
+		for itemLink in string.gmatch(itemText, "|Hitem:[^|]+|h%[[^%]]+%]|h") do
+			local ctx = Resolvers.BuildLootItemContext(itemLink);
+			recorded = Resolvers.RecordCriteriaProgress(CRITERIA_TYPE.ACQUIRE_ITEM, 0, 1, ctx, "acquire-item-any-" .. itemLink) or recorded;
+			if looted then
+				recorded = Resolvers.RecordCriteriaProgress(CRITERIA_TYPE.LOOT_ITEM, 0, 1, ctx, "loot-item-any-" .. itemLink) or recorded;
+				recorded = Resolvers.RecordLootedItem(ctx.itemID, count) or recorded;
+				recorded = Resolvers.RecordCriteriaProgress(CRITERIA_TYPE.LOOT_ANY_ITEM, 0, 1, ctx, "loot-any-item-" .. itemLink) or recorded;
+			end
+			recorded = Resolvers.RecordCriteriaProgress(CRITERIA_TYPE.OBTAIN_ANY_ITEM, 0, 1, ctx, "obtain-any-item-" .. itemLink) or recorded;
 		end
 	end
 
@@ -5423,7 +5906,7 @@ function Resolvers.RecordSimpleCriteria(criteriaType, dedupeKey)
 	return recorded;
 end
 
-function Resolvers.BackfillCurrentState(isReloadingUi)
+function Resolvers.BackfillCurrentState(isReloadingUi, isInitialLogin)
 	Private.state = Private.state or {};
 	if Private.state.currentStateBackfillRunning then
 		return false;
@@ -5440,8 +5923,9 @@ function Resolvers.BackfillCurrentState(isReloadingUi)
 		if Achievements.ClearExplorationCache then Achievements.ClearExplorationCache(); end
 		if Achievements.ClearCharacterScanCache then Achievements.ClearCharacterScanCache(); end
 
+		Resolvers.BackfillLootedItems(isReloadingUi);
 		recorded = Resolvers.RecordLoginCriteria() or recorded;
-		recorded = RecordBattlegroundParticipation(isReloadingUi) or recorded;
+		recorded = RecordBattlegroundParticipation(isReloadingUi, isInitialLogin) or recorded;
 		recorded = Resolvers.RecordArenaParticipation() or recorded;
 		recorded = Resolvers.RecordInstanceRun() or recorded;
 		recorded = Resolvers.RecordPlayerAuraCriteria("player") or recorded;
@@ -6765,11 +7249,13 @@ MODIFIER_LEAF_DECODERS[30] = function(ctx, asset)
 	return id == asset;
 end;
 
--- 32: SOURCE_MAP == asset
-MODIFIER_LEAF_DECODERS[32] = function(ctx, asset)
-	local mapID = ctx.mapID or GetCurrentMapID();
-	if not mapID then return false; end
-	return mapID == asset;
+-- 32: SOURCE_MAP == asset (instance map id; a nil asset is the Eastern Kingdoms, 0).
+MODIFIER_LEAF_DECODERS[32] = function(_, asset)
+	local _, _, _, _, _, _, _, instanceID = GetInstanceInfo();
+	if Private.IsSecret(instanceID) or tonumber(instanceID) == nil then
+		return false;
+	end
+	return tonumber(instanceID) == (tonumber(asset) or 0);
 end;
 
 -- 34: ITEM_SUBCLASS in the loot-stat row for achievement 1518
@@ -7482,7 +7968,7 @@ do
 		return RecordPlayerKillEvent(refreshTypes, CRITERIA_TYPE.KILL_PLAYER_NO_HONOR_CHECK, 0, ctx);
 	end
 
-	local function RecordKillInPlayerArea(refreshTypes, ctx)
+	function Resolvers.RecordKillInPlayerArea(refreshTypes, ctx)
 		local seen = {};
 		for _, criteria in ipairs(Resolvers.GetPerCriteriaRecordableCriteriaByType(CRITERIA_TYPE.KILL_PLAYER_IN_AREA)) do
 			local areaID = tonumber(criteria.asset) or 0;
@@ -7523,7 +8009,7 @@ do
 		killState.honored[death.guid] = now;
 		local ctx = CompletePlayerKillContext(BuildKillCombatContext(UnitGUID("player"), nil, death.guid, death.flags, nil));
 		refreshTypes = RecordPlayerKillEvent(refreshTypes, CRITERIA_TYPE.HONORABLE_KILL, 0, ctx);
-		refreshTypes = RecordKillInPlayerArea(refreshTypes, ctx);
+		refreshTypes = Resolvers.RecordKillInPlayerArea(refreshTypes, ctx);
 		refreshTypes = RecordPlayerKillCredit(killState, refreshTypes, ctx, now);
 		local ownKill = killState.ownKills[death.guid];
 		if ownKill then
@@ -7537,11 +8023,26 @@ do
 		return (string.gsub(name, "%-.*$", ""));
 	end
 
+	-- Grey victims give no honor; skip only those grey by both the server formula and the client's colouring.
+	local function IsGreyVictim(guid)
+		local facts = Resolvers.GetCachedTargetFacts(guid);
+		local level, playerLevel = facts and tonumber(facts.level), tonumber(UnitLevel("player"));
+		if not level or not playerLevel or playerLevel <= 5 then
+			return false;
+		end
+		local greyLevel = playerLevel <= 39 and playerLevel - 5 - math.floor(playerLevel / 10) or playerLevel <= 59 and playerLevel - 1 - math.floor(playerLevel / 5) or playerLevel - 9;
+		local greenRange = type(GetQuestGreenRange) == "function" and tonumber(GetQuestGreenRange()) or nil;
+		if greenRange then
+			greyLevel = math.min(greyLevel, playerLevel - greenRange - 1);
+		end
+		return level <= greyLevel;
+	end
+
 	local function FindRecentPlayerDeath(killState, name, at)
 		local shortName = ShortPlayerName(name);
 		local exact, short, ambiguous;
 		for _, death in ipairs(killState.deaths) do
-			if math.abs(death.at - at) <= PLAYER_KILL_WINDOW then
+			if not death.grey and math.abs(death.at - at) <= PLAYER_KILL_WINDOW then
 				if death.name == name then
 					exact = death;
 				elseif ShortPlayerName(death.name) == shortName then
@@ -7571,7 +8072,7 @@ do
 			return false;
 		end
 		local killState, now = GetPlayerKillState();
-		killState.deaths[#killState.deaths + 1] = { guid = guid, name = name, flags = flags, at = now };
+		killState.deaths[#killState.deaths + 1] = { guid = guid, name = name, flags = flags, at = now, grey = IsGreyVictim(guid) };
 		return ResolvePendingHonorKills(killState, now);
 	end
 
@@ -8375,7 +8876,7 @@ end
 
 function Resolvers.SetCriteriaProgress(criteriaID, quantity, completed, characterName)
 	criteriaID = tonumber(criteriaID);
-	if not criteriaID or criteriaID == 0 then
+	if not criteriaID or criteriaID == 0 or not Resolvers.CriteriaFactionAllowsProgress(criteriaID) then
 		return false;
 	end
 
@@ -8392,7 +8893,7 @@ end
 
 function Resolvers.IncrementCriteriaProgress(criteriaID, amount, requiredQuantity, characterName)
 	criteriaID = tonumber(criteriaID);
-	if not criteriaID or criteriaID == 0 then
+	if not criteriaID or criteriaID == 0 or not Resolvers.CriteriaFactionAllowsProgress(criteriaID) then
 		return false;
 	end
 
@@ -8499,7 +9000,7 @@ criteriaTypeHandlers[CRITERIA_TYPE.DIE_TO_ENVIRONMENTAL_DAMAGE] = function(conte
 criteriaTypeHandlers[CRITERIA_TYPE.WIN_DUEL] = function(context) return ResolveAssetCounter(context, "win-duel"); end;
 criteriaTypeHandlers[CRITERIA_TYPE.LOSE_DUEL] = function(context) return ResolveAssetCounter(context, "lose-duel"); end;
 criteriaTypeHandlers[CRITERIA_TYPE.USE_ITEM] = ResolveUseItem;
-criteriaTypeHandlers[CRITERIA_TYPE.LOOT_ITEM] = ResolveLootItem;
+criteriaTypeHandlers[CRITERIA_TYPE.LOOT_ITEM] = ResolveSavedProgress;
 criteriaTypeHandlers[CRITERIA_TYPE.REVEAL_WORLD_MAP_OVERLAY] = ResolveRevealedWorldMapOverlay;
 criteriaTypeHandlers[CRITERIA_TYPE.GOT_HAIRCUT] = function(context) return ResolveAssetCounter(context, "got-haircut"); end;
 criteriaTypeHandlers[CRITERIA_TYPE.NEED_ROLL] = Resolvers.ResolveSimpleSavedProgress;
@@ -8595,12 +9096,16 @@ Achievements.RecordUsedItem = RecordUsedItemID;
 Achievements.RecordPlayerDeath = RecordPlayerDeath;
 Achievements.RecordBattlegroundParticipation = RecordBattlegroundParticipation;
 Achievements.RecordBattlegroundWin = RecordBattlegroundWin;
+Achievements.RecordBattlefieldObjectives = Resolvers.RecordBattlefieldObjectives;
+Achievements.RequestBattlefieldObjectiveScore = Resolvers.RequestBattlefieldObjectiveScore;
+Achievements.NoteBattlefieldMatchComplete = Resolvers.NoteBattlefieldMatchComplete;
 Achievements.RecordArenaParticipation = Resolvers.RecordArenaParticipation;
 Achievements.RecordArenaWin = Resolvers.RecordArenaWin;
 Achievements.RecordLoginCriteria = Resolvers.RecordLoginCriteria;
 Achievements.RecordCurrencyScan = Resolvers.RecordCurrencyScan;
 Achievements.RecordPlayerSpellcast = Resolvers.RecordPlayerSpellcast;
 Achievements.RecordLootAcquisitionCriteria = Resolvers.RecordLootAcquisitionCriteria;
+Achievements.RecordLootWindowCriteria = Resolvers.RecordLootWindowCriteria;
 Achievements.RecordMoneyChatCriteria = Resolvers.RecordMoneyChatCriteria;
 Achievements.RecordMailboxAuctionCriteria = Resolvers.RecordMailboxAuctionCriteria;
 Achievements.RecordGameObjectTextCriteria = Resolvers.RecordGameObjectTextCriteria;
@@ -8609,6 +9114,8 @@ Achievements.RecordEncounterDefeat = Resolvers.RecordEncounterDefeat;
 Achievements.RecordPlayerMoneySnapshot = Resolvers.RecordPlayerMoneySnapshot;
 Achievements.RecordBarberShopCriteria = Resolvers.RecordBarberShopCriteria;
 Achievements.BackfillCurrentState = Resolvers.BackfillCurrentState;
+Achievements.BackfillLootedItems = Resolvers.BackfillLootedItems;
+Achievements.BackfillBankLootedItems = Resolvers.BackfillBankLootedItems;
 Achievements.hookSimpleActionCriteria = Resolvers.HookSimpleActionCriteria;
 Achievements.RecordDuelOutcomeFromSystemMessage = RecordDuelOutcomeFromSystemMessage;
 Achievements.RecordCriteriaStart = Resolvers.RecordCriteriaStart;

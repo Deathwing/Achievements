@@ -5,6 +5,7 @@ end
 
 local Private = Achievements.private;
 local IsSecret = Private.IsSecret;
+local IS_FOREVER = Achievements.IS_FOREVER;
 
 local ADDON_PREFIX = "ACHV";
 local PROTOCOL_VERSION = "2";
@@ -51,10 +52,13 @@ local function CallAfter(delay, callback)
 end
 
 local function NameIncludesRealm(name)
-	return type(name) == "string" and name:find("%-") ~= nil;
+	return not IS_FOREVER and type(name) == "string" and name:find("%-") ~= nil;
 end
 
 local function NormaliseName(name, preserveRealm)
+	if IS_FOREVER then
+		return Private.NormaliseForeverName(name);
+	end
 	if type(name) ~= "string" or name == "" then
 		return nil;
 	end
@@ -146,6 +150,9 @@ local function SanitiseWhisperTarget(channel, target, preserveTargetRealm)
 end
 
 local function IsLocalSender(sender)
+	if IS_FOREVER then
+		return Private.IsSelfName(sender);
+	end
 	local localName = UnitName("player");
 	if not localName or not sender then
 		return false;
@@ -383,8 +390,8 @@ local function RememberChannelListMembers(text)
 	if type(text) ~= "string" or text == "" then
 		return;
 	end
-	for token in text:gmatch("[^,%s]+") do
-		local memberName = token:gsub("^[%@%*%+]+", ""):gsub("[%.,;:]+$", "");
+	for token in text:gmatch(IS_FOREVER and "[^,]+" or "[^,%s]+") do
+		local memberName = token:match("^%s*(.-)%s*$"):gsub("^[%@%*%+]+", ""):gsub("[%.,;:]+$", "");
 		if memberName ~= "" and not tonumber(memberName) then
 			RememberChannelMember(memberName);
 		end

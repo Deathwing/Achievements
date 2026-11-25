@@ -5,6 +5,7 @@ end
 
 local Private = Achievements.private;
 local IsSecret = Private.IsSecret;
+local IS_FOREVER = Achievements.IS_FOREVER;
 local TITLE_DATA = Private.data and Private.data.titles or {};
 local ACHIEVEMENT_DATA = Private.data and Private.data.achievements or {};
 
@@ -48,6 +49,9 @@ local function DebugTitle(message)
 end
 
 local function NormaliseName(name)
+	if IS_FOREVER then
+		return Private.NormaliseForeverName(name);
+	end
 	if type(name) ~= "string" or name == "" then
 		return nil;
 	end
@@ -101,12 +105,48 @@ local function SanitiseStoredPlayerNames(players)
 end
 
 local function IsLocalName(name)
+	if IS_FOREVER then
+		return Private.IsSelfName(name);
+	end
 	local localName = UnitName("player");
 	if not localName or not name then
 		return false;
 	end
 	local shortName = Ambiguate(name, "short") or tostring(name):match("^([^%-]+)") or name;
 	return shortName == localName;
+end
+
+local function GetLocalPlayerName()
+	if IS_FOREVER then
+		return Private.UnitFullName("player");
+	end
+	return UnitName("player");
+end
+
+local function GetLocalPVPName(playerName)
+	local pvpName = UnitPVPName("player");
+	-- Forever: only a PvP name that carries the full name.
+	if IS_FOREVER and (IsSecret(pvpName) or type(pvpName) ~= "string" or not pvpName:find(playerName, 1, true)) then
+		return nil;
+	end
+	return pvpName;
+end
+
+local function StripRealmSeparators(realm)
+	return (tostring(realm or ""):gsub("[%s%-]", ""));
+end
+
+-- Era/TBC: a unit from another realm is never you.
+local function IsOtherRealmUnit(unit)
+	if IS_FOREVER or not unit then
+		return false;
+	end
+	local _, realm = UnitName(unit);
+	if IsSecret(realm) or type(realm) ~= "string" or realm == "" then
+		return false;
+	end
+	realm = StripRealmSeparators(realm);
+	return realm ~= StripRealmSeparators(GetNormalizedRealmName and GetNormalizedRealmName()) and realm ~= StripRealmSeparators(GetRealmName());
 end
 
 local function GetCharacterTitleDB()
@@ -323,7 +363,7 @@ local function GetCurrentTitleSnapshot()
 end
 
 local function GetLocalPlayerDisplayName()
-	local playerName = UnitName("player");
+	local playerName = GetLocalPlayerName();
 	if not playerName or playerName == "" then
 		return nil;
 	end
@@ -334,6 +374,9 @@ local function GetLocalPlayerDisplayName()
 	end
 	if IsPVPTitleSuppressed() then
 		return playerName;
+	end
+	if IS_FOREVER then
+		return GetLocalPVPName(playerName) or playerName;
 	end
 	return UnitPVPName("player");
 end
@@ -350,6 +393,9 @@ end
 local function GetUnitBaseName(unit)
 	if not unit then
 		return nil;
+	end
+	if IS_FOREVER then
+		return Private.UnitFullName(unit);
 	end
 	local name = UnitName(unit);
 	if not IsSecret(name) and type(name) == "string" and name ~= "" then
@@ -368,7 +414,10 @@ local function GetKnownPlayerDisplayName(playerName, unit)
 			return GetLocalPlayerDisplayName();
 		end
 	end
-	if playerName and IsLocalName(playerName) then
+	if IS_FOREVER and unit then
+		playerName = GetUnitBaseName(unit) or playerName;
+	end
+	if playerName and IsLocalName(playerName) and not IsOtherRealmUnit(unit) then
 		return GetLocalPlayerDisplayName();
 	end
 	if unit and not UnitIsPlayer(unit) then
@@ -514,11 +563,11 @@ local function SelectNoTitle()
 end
 
 local function GetCurrentPVPTitleText(playerName)
-	playerName = playerName or UnitName("player");
+	playerName = playerName or GetLocalPlayerName();
 	if not playerName or playerName == "" then
 		return nil;
 	end
-	local pvpName = UnitPVPName("player");
+	local pvpName = GetLocalPVPName(playerName);
 	if type(pvpName) == "string" and pvpName ~= "" and pvpName ~= playerName then
 		return pvpName;
 	end
@@ -696,7 +745,7 @@ local function EnsurePaperDollTitleDropdown(frame)
 end
 
 local function BuildTitleMenuEntries()
-	local playerName = UnitName("player") or "";
+	local playerName = GetLocalPlayerName() or "";
 	local playerSex = UnitSex("player");
 	local entries = {};
 	local nativeMasks = {};

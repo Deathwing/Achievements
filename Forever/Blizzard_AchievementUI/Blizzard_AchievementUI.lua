@@ -1600,7 +1600,9 @@ function AchievementsFrameComparison_OnEvent (self, event, ...)
 		AchievementsFrameComparison_UpdateStatusBars(achievementsFunctions.selectedCategory)
 	elseif ( event == "UNIT_PORTRAIT_UPDATE" ) then
 		local updateUnit = ...;
-		if ( updateUnit and updateUnit == AchievementsFrameComparisonHeaderPortrait.unit and UnitName(updateUnit) == AchievementsFrameComparisonHeaderName:GetText() ) then
+		local fullName = updateUnit and updateUnit == AchievementsFrameComparisonHeaderPortrait.unit and AchievementsAddon.private.UnitFullName(updateUnit);
+		local headerName = fullName and AchievementsFrameComparisonHeaderName:GetText();
+		if ( fullName and not AchievementsAddon.private.IsSecret(headerName) and fullName == headerName ) then
 			SetPortraitTexture(AchievementsFrameComparisonHeaderPortrait, updateUnit);
 		end
 	end
@@ -1613,7 +1615,7 @@ function AchievementsFrameComparison_SetUnit (unit)
 	SetAchievementComparisonUnit(unit);
 	
 	AchievementsFrameComparisonHeaderPoints:SetText(GetComparisonAchievementPoints());
-	AchievementsFrameComparisonHeaderName:SetText(UnitName(unit));
+	AchievementsFrameComparisonHeaderName:SetText(AchievementsAddon.private.UnitFullName(unit) or UnitName(unit));
 	SetPortraitTexture(AchievementsFrameComparisonHeaderPortrait, unit);
 	AchievementsFrameComparisonHeaderPortrait.unit = unit;
 	AchievementsFrameComparisonHeaderPortrait.race = UnitRace(unit);

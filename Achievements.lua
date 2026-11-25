@@ -27,6 +27,46 @@ function Private.IsSecret(value)
 	return issecretvalue ~= nil and issecretvalue(value) == true;
 end
 
+if Achievements.IS_FOREVER then
+	-- Forever has no realms: a player is "First Surname" and UnitName's second return is the surname.
+	function Private.NormaliseForeverName(name)
+		if Private.IsSecret(name) or type(name) ~= "string" then
+			return nil;
+		end
+		name = name:match("^%s*(.-)%s*$");
+		local head, tail = name:match("^([^%-]*)%-(.*)$");
+		if head then
+			local surname = not head:find(" ", 1, true) and tail:match("^([^%-]+)");
+			name = (surname and (head .. " " .. surname) or head):match("^%s*(.-)%s*$");
+		end
+		return name ~= "" and name or nil;
+	end
+
+	function Private.UnitFullName(unit)
+		if Private.IsSecret(unit) or not unit then
+			return nil;
+		end
+		local name, surname = UnitName(unit);
+		if Private.IsSecret(name) or Private.IsSecret(surname) or type(name) ~= "string" or name == "" then
+			return nil;
+		end
+		if type(surname) == "string" and surname ~= "" then
+			return name .. " " .. surname;
+		end
+		return name;
+	end
+
+	function Private.IsSelfName(name, allowFirstName)
+		local normalised = Private.NormaliseForeverName(name);
+		local own = normalised and Private.UnitFullName("player");
+		if not own then
+			return false;
+		end
+		normalised, own = string.lower(normalised), string.lower(own);
+		return normalised == own or (allowFirstName == true and normalised == own:match("^(%S+)"));
+	end
+end
+
 local SetPortraitToTexture = SetPortraitToTexture or (rawget(_G, "AchievementsForeverCompat") or {}).SetPortraitToTexture;
 
 local DEBUG = false;
@@ -453,6 +493,9 @@ Private.state.knownPlayerFullNames = Private.state.knownPlayerFullNames or {};
 Private.suppressFirstLoginAchievementNotifications = suppressFirstLoginAchievementNotifications;
 
 local function StripPlayerRealmSuffix(name)
+	if Achievements.IS_FOREVER then
+		return Private.NormaliseForeverName(name);
+	end
 	if type(name) ~= "string" or name == "" then
 		return nil;
 	end
@@ -460,10 +503,13 @@ local function StripPlayerRealmSuffix(name)
 end
 
 local function PlayerNameIncludesRealm(name)
-	return type(name) == "string" and name:find("%-") ~= nil;
+	return not Achievements.IS_FOREVER and type(name) == "string" and name:find("%-") ~= nil;
 end
 
 local function NormalisePlayerName(name, preserveRealm)
+	if Achievements.IS_FOREVER then
+		return Private.NormaliseForeverName(name);
+	end
 	if type(name) ~= "string" or name == "" then
 		return nil;
 	end
